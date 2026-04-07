@@ -80,6 +80,14 @@ async function safeJson<T>(res: Response): Promise<T> {
   return data as T;
 }
 
+function hoursLabel(settings?: BusinessSettings | null) {
+  if (!settings) return "Caricamento orari...";
+  const parts: string[] = [];
+  if (settings.morningEnabled) parts.push(`Mattina ${settings.morningOpen}-${settings.morningClose}`);
+  if (settings.afternoonEnabled) parts.push(`Pomeriggio ${settings.afternoonOpen}-${settings.afternoonClose}`);
+  return parts.join(" · ");
+}
+
 function emptyService(): Service {
   return { id: "", name: "", durationMin: 30, price: 0, active: true };
 }
@@ -590,95 +598,116 @@ export default function GestionalePage() {
 
       {tab === "calendario" && (
         <>
-          <section className="card" style={{ marginBottom: 18 }}>
-            <div className="gridTwoCols">
-              <div>
-                <label>Data calendario</label>
-                <input type="date" value={calendarDate} onChange={(e) => setCalendarDate(e.target.value)} />
-              </div>
-              <div>
-                <label>Slot liberi per il servizio scelto</label>
-                <div className="badge info" style={{ marginTop: 10 }}>{availableCalendarSlots.length} slot disponibili</div>
-              </div>
+          <header className="hero" style={{ paddingTop: 6, paddingBottom: 4 }}>
+            <div className="brand">
+              <div className="title" style={{ fontSize: 24 }}>Calendario manuale</div>
+              <p className="subtitle">Stessa esperienza della web app, ma dedicata al titolare per inserire e disdire appuntamenti manualmente.</p>
             </div>
-          </section>
+          </header>
 
-          <section className="gridTwoCols" style={{ alignItems: "start", gap: 18, marginBottom: 18 }}>
-            <div className="card">
-              <div className="grid">
-                <div className="sectionTitle">Nuovo appuntamento manuale</div>
-                {manualBookingMessage && <div className={`badge ${manualBookingMessage.includes("successo") ? "ok" : "error"}`}>{manualBookingMessage}</div>}
-                <div>
-                  <label>Nome cliente</label>
-                  <input value={manualBooking.name} onChange={(e) => setManualBooking({ ...manualBooking, name: e.target.value })} placeholder="Nome e cognome" />
-                </div>
-                <div>
-                  <label>Telefono</label>
-                  <input value={manualBooking.phone} onChange={(e) => setManualBooking({ ...manualBooking, phone: e.target.value })} placeholder="Numero cliente" />
-                </div>
+          <section className="card" style={{ marginBottom: 18 }}>
+            <div className="grid">
+              <div className="gridTwoCols">
                 <div>
                   <label>Servizio</label>
                   <select value={manualBooking.serviceId} onChange={(e) => setManualBooking({ ...manualBooking, serviceId: e.target.value, time: "" })}>
                     <option value="">Seleziona servizio</option>
                     {activeServices.map((service) => (
-                      <option key={service.id} value={service.id}>{service.name} · {service.durationMin} min · €{service.price}</option>
+                      <option key={service.id} value={service.id}>{service.name} ({service.durationMin} min · €{service.price})</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label>Orario</label>
-                  <select value={manualBooking.time} onChange={(e) => setManualBooking({ ...manualBooking, time: e.target.value })}>
-                    <option value="">Seleziona orario</option>
-                    {availableCalendarSlots.map((slot) => (
-                      <option key={slot} value={slot}>{slot}</option>
-                    ))}
-                  </select>
+                  <label>Data</label>
+                  <input type="date" value={calendarDate} onChange={(e) => setCalendarDate(e.target.value)} />
                 </div>
-                <div>
-                  <label>Note</label>
-                  <textarea value={manualBooking.notes} onChange={(e) => setManualBooking({ ...manualBooking, notes: e.target.value })} placeholder="Note appuntamento" rows={4} />
-                </div>
-                <button className="btn" onClick={createManualBooking} disabled={savingManualBooking || !manualBooking.serviceId || !manualBooking.time}>
-                  {savingManualBooking ? "Salvataggio..." : "Prendi appuntamento manualmente"}
-                </button>
               </div>
-            </div>
 
-            <div className="card">
-              <div className="grid">
-                <div className="sectionTitle">Agenda del giorno</div>
-                {calendarMessage && <div className="badge error">{calendarMessage}</div>}
+              <div className="badge info">
+                Orari configurati: {hoursLabel(settings)} · intervallo slot {settings?.slotIntervalMin || 15} min · {availableCalendarSlots.length} slot disponibili
+              </div>
+
+              {manualBookingMessage && <div className={`badge ${manualBookingMessage.includes("successo") ? "ok" : "error"}`}>{manualBookingMessage}</div>}
+
+              <div>
+                <label>Orari disponibili</label>
                 {calendarLoading ? (
                   <div className="badge info">Caricamento agenda...</div>
-                ) : calendarBookings.length === 0 ? (
-                  <div className="badge info">Nessun appuntamento per questa giornata.</div>
+                ) : !manualBooking.serviceId ? (
+                  <div className="badge info">Seleziona prima un servizio.</div>
+                ) : availableCalendarSlots.length === 0 ? (
+                  <div className="badge info">Nessuno slot disponibile per il servizio selezionato.</div>
                 ) : (
-                  <div className="bookingList">
-                    {calendarBookings.map((item) => (
-                      <div key={item.id} className="bookingCard">
-                        <div className="bookingTop">
-                          <div>
-                            <h3>{item.customerName}</h3>
-                            <p className="muted">{item.serviceName} · €{item.price}</p>
-                          </div>
-                          <div className="bookingTime">
-                            <strong>{item.startLabel} - {item.endLabel}</strong>
-                            <span className="muted">{item.dateLabel}</span>
-                          </div>
-                        </div>
-                        <div className="bookingMeta">
-                          <div><strong>Telefono:</strong> {item.phone || "—"}</div>
-                          <div><strong>Note:</strong> {item.notes || "—"}</div>
-                        </div>
-                        <div className="bookingActions">
-                          {item.whatsappUrl && <a className="tabBtn secondaryBtn" href={item.whatsappUrl} target="_blank">WhatsApp</a>}
-                          <button className="tabBtn dangerBtn" onClick={() => removeCalendarBooking(item.id)} disabled={calendarDeletingId === item.id}>{calendarDeletingId === item.id ? "Disdico..." : "Disdici"}</button>
-                        </div>
-                      </div>
+                  <div className="slots">
+                    {availableCalendarSlots.map((slot) => (
+                      <button
+                        key={slot}
+                        type="button"
+                        className={`slot ${manualBooking.time === slot ? "active" : ""}`}
+                        onClick={() => setManualBooking((prev) => ({ ...prev, time: slot }))}
+                      >
+                        {slot}
+                      </button>
                     ))}
                   </div>
                 )}
               </div>
+
+              <div>
+                <label>Nome</label>
+                <input value={manualBooking.name} onChange={(e) => setManualBooking({ ...manualBooking, name: e.target.value })} placeholder="Nome e cognome" />
+              </div>
+
+              <div>
+                <label>Telefono</label>
+                <input value={manualBooking.phone} onChange={(e) => setManualBooking({ ...manualBooking, phone: e.target.value })} placeholder="Numero cliente" />
+              </div>
+
+              <div>
+                <label>Note</label>
+                <textarea value={manualBooking.notes} onChange={(e) => setManualBooking({ ...manualBooking, notes: e.target.value })} placeholder="Note appuntamento" rows={3} />
+              </div>
+
+              <button className="btn" onClick={createManualBooking} disabled={savingManualBooking || !manualBooking.serviceId || !manualBooking.time}>
+                {savingManualBooking ? "Prenotazione..." : "Conferma prenotazione manuale"}
+              </button>
+            </div>
+          </section>
+
+          <section className="card" style={{ marginBottom: 18 }}>
+            <div className="grid">
+              <div className="sectionTitle">Agenda del giorno</div>
+              {calendarMessage && <div className="badge error">{calendarMessage}</div>}
+              {calendarLoading ? (
+                <div className="badge info">Caricamento agenda...</div>
+              ) : calendarBookings.length === 0 ? (
+                <div className="badge info">Nessun appuntamento per questa giornata.</div>
+              ) : (
+                <div className="bookingList">
+                  {calendarBookings.map((item) => (
+                    <div key={item.id} className="bookingCard">
+                      <div className="bookingTop">
+                        <div>
+                          <h3>{item.customerName}</h3>
+                          <p className="muted">{item.serviceName} · €{item.price}</p>
+                        </div>
+                        <div className="bookingTime">
+                          <strong>{item.startLabel} - {item.endLabel}</strong>
+                          <span className="muted">{item.dateLabel}</span>
+                        </div>
+                      </div>
+                      <div className="bookingMeta">
+                        <div><strong>Telefono:</strong> {item.phone || "—"}</div>
+                        <div><strong>Note:</strong> {item.notes || "—"}</div>
+                      </div>
+                      <div className="bookingActions">
+                        {item.whatsappUrl && <a className="tabBtn secondaryBtn" href={item.whatsappUrl} target="_blank">WhatsApp</a>}
+                        <button className="tabBtn dangerBtn" onClick={() => removeCalendarBooking(item.id)} disabled={calendarDeletingId === item.id}>{calendarDeletingId === item.id ? "Disdico..." : "Disdici"}</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
 
@@ -716,7 +745,7 @@ export default function GestionalePage() {
         </>
       )}
 
-      {tab === "clienti" && (
+{tab === "clienti" && (
         <section className="card">
           <div className="grid">
             <div className="sectionTitle">Rubrica clienti</div>
