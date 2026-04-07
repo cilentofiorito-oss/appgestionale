@@ -45,6 +45,16 @@ type ManualBookingForm = {
   notes: string;
 };
 
+type CustomerHistory = {
+  key: string;
+  customerName: string;
+  phone: string;
+  totalBookings: number;
+  totalSpent: number;
+  whatsappUrl: string;
+  bookings: Booking[];
+};
+
 const DEFAULT_SETTINGS: BusinessSettings = {
   slotIntervalMin: 15,
   minAdvanceMin: 60,
@@ -175,6 +185,7 @@ export default function GestionalePage() {
   const [savingManualBooking, setSavingManualBooking] = useState(false);
   const [manualBookingMessage, setManualBookingMessage] = useState("");
   const [manualBooking, setManualBooking] = useState<ManualBookingForm>(emptyManualBooking());
+  const [openHistoryCustomerKey, setOpenHistoryCustomerKey] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -201,6 +212,12 @@ export default function GestionalePage() {
       setManualBooking((prev) => ({ ...prev, serviceId: services.find((s) => s.active)?.id || services[0].id || "" }));
     }
   }, [services, manualBooking.serviceId]);
+
+  useEffect(() => {
+    if (!customerHistoryGroups.some((group) => group.key === openHistoryCustomerKey)) {
+      setOpenHistoryCustomerKey(customerHistoryGroups[0]?.key || null);
+    }
+  }, [customerHistoryGroups, openHistoryCustomerKey]);
 
   async function checkAuth() {
     try {
@@ -446,25 +463,41 @@ export default function GestionalePage() {
     [bookings]
   );
 
-  const customers = useMemo(() => {
-    const map = new Map<string, { customerName: string; phone: string; totalBookings: number; totalSpent: number; lastDate: string; whatsappUrl: string }>();
+  const customerHistoryGroups = useMemo(() => {
+    const map = new Map<string, CustomerHistory>();
     for (const booking of allBookingsSorted) {
       const key = `${booking.customerName}|${booking.phone}`;
       const prev = map.get(key) || {
+        key,
         customerName: booking.customerName,
         phone: booking.phone,
         totalBookings: 0,
         totalSpent: 0,
-        lastDate: booking.dateLabel,
         whatsappUrl: booking.whatsappUrl,
+        bookings: [],
       };
       prev.totalBookings += 1;
       prev.totalSpent += Number(booking.price) || 0;
-      prev.lastDate = prev.lastDate || booking.dateLabel;
+      if (!prev.whatsappUrl && booking.whatsappUrl) prev.whatsappUrl = booking.whatsappUrl;
+      prev.bookings.push(booking);
       map.set(key, prev);
     }
-    return Array.from(map.values()).sort((a, b) => b.totalBookings - a.totalBookings);
+    return Array.from(map.values())
+      .map((group) => ({
+        ...group,
+        bookings: [...group.bookings].sort((a, b) => new Date(b.startISO).getTime() - new Date(a.startISO).getTime()),
+      }))
+      .sort((a, b) => {
+        const aTime = a.bookings[0] ? new Date(a.bookings[0].startISO).getTime() : 0;
+        const bTime = b.bookings[0] ? new Date(b.bookings[0].startISO).getTime() : 0;
+        return bTime - aTime;
+      });
   }, [allBookingsSorted]);
+
+  const customers = useMemo(
+    () => customerHistoryGroups.map(({ bookings, key, ...customer }) => customer),
+    [customerHistoryGroups]
+  );
 
   const activeServices = useMemo(() => services.filter((service) => service.active), [services]);
   const selectedService = useMemo(
@@ -800,16 +833,46 @@ export default function GestionalePage() {
       {tab === "storico" && (
         <section className="card">
           <div className="grid">
-            <div className="sectionTitle">Storico appuntamenti</div>
-            {allBookingsSorted.length === 0 ? <div className="badge info">Nessuno storico disponibile nella vista selezionata.</div> : allBookingsSorted.map((item) => (
-              <div key={item.id} className="holidayItem">
-                <div>
-                  <strong>{item.customerName}</strong>
-                  <div className="muted">{item.dateLabel} · {item.startLabel} · {item.serviceName}</div>
+            <div className="sectionTitle">Storico clienti</div>
+            <div className="muted">Ogni cliente compare una sola volta. Clicca sul cliente per aprire il suo storico completo.</div>
+            {customerHistoryGroups.length === 0 ? <div className="badge info">Nessuno storico disponibile nella vista selezionata.</div> : customerHistoryGroups.map((customer) => {
+              const isOpen = openHistoryCustomerKey === customer.key;
+              const latestBooking = customer.bookings[0];
+              return (
+                <div key={customer.key} className="historyCard">
+                  <button
+                    type="button"
+                    className={`historyToggle ${isOpen ? "open" : ""}`}
+                    onClick={() => setOpenHistoryCustomerKey(isOpen ? null : customer.key)}
+                  >
+                    <div>
+                      <strong>{customer.customerName}</strong>
+                      <div className="muted">{customer.phone || "Telefono non disponibile"}</div>
+                      <div className="muted">{customer.totalBookings} appuntamenti · €{customer.totalSpent.toFixed(2)} · Ultimo: {latestBooking ? `${latestBooking.dateLabel} ${latestBooking.startLabel}` : "—"}</div>
+                    </div>
+                    <span className="historyArrow">{isOpen ? "−" : "+"}</span>
+                  </button>
+
+                  {isOpen && (
+                    <div className="historyDetails">
+                      <div className="bookingActions">
+                        {customer.whatsappUrl && <a className="tabBtn secondaryBtn" href={customer.whatsappUrl} target="_blank">WhatsApp</a>}
+                      </div>
+                      {customer.bookings.map((item) => (
+                        <div key={item.id} className="historyBookingRow">
+                          <div>
+                            <strong>{item.serviceName}</strong>
+                            <div className="muted">{item.dateLabel} · {item.startLabel} - {item.endLabel}</div>
+                            {item.notes ? <div className="muted">Note: {item.notes}</div> : null}
+                          </div>
+                          <div><strong>€{Number(item.price || 0).toFixed(2)}</strong></div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div><strong>€{item.price}</strong></div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

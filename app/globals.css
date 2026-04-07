@@ -186,3 +186,55 @@ textarea{ resize: vertical; }
   .menuToggle{ width: 52px; height: 52px; border-radius: 16px; }
   .calendarTopBar{ padding-right: 64px; }
 }
+
+.historyCard{
+  border:1px solid var(--border);
+  border-radius:20px;
+  background: rgba(255,255,255,0.03);
+  overflow:hidden;
+}
+.historyToggle{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:16px 18px;
+  border:0;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.historyToggle.open{
+  background: rgba(255,255,255,0.03);
+}
+.historyArrow{
+  flex:0 0 auto;
+  width:34px;
+  height:34px;
+  border-radius:999px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(255,255,255,0.12);
+  font-size:22px;
+  line-height:1;
+}
+.historyDetails{
+  padding:0 18px 18px;
+  display:grid;
+  gap:10px;
+}
+.historyBookingRow{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  padding:12px 14px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+}
+@media (max-width: 640px){
+  .historyBookingRow{ flex-direction:column; }
+}
