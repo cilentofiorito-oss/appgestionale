@@ -3,7 +3,7 @@ export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import { DateTime } from "luxon";
-import { listBookings, TIME_ZONE } from "@/lib/admin-calendar";
+import { listBookings, TIME_ZONE, createAdminBooking } from "@/lib/admin-calendar";
 import { requireAdmin } from "@/lib/admin-auth";
 
 export async function GET(req: Request) {
@@ -30,5 +30,27 @@ export async function GET(req: Request) {
   } catch (error: any) {
     console.error("Admin bookings GET error:", error);
     return NextResponse.json({ error: error?.message || "Errore nel recupero appuntamenti" }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  const unauthorized = await requireAdmin();
+  if (unauthorized) return unauthorized;
+
+  try {
+    const body = await req.json();
+    const booking = await createAdminBooking({
+      name: String(body?.name || "").trim(),
+      phone: String(body?.phone || "").trim(),
+      date: String(body?.date || "").trim(),
+      time: String(body?.time || "").trim(),
+      serviceId: String(body?.serviceId || "").trim(),
+      notes: String(body?.notes || "").trim(),
+    });
+
+    return NextResponse.json({ ok: true, booking });
+  } catch (error: any) {
+    console.error("Admin bookings POST error:", error);
+    return NextResponse.json({ error: error?.message || "Errore creazione appuntamento" }, { status: 500 });
   }
 }

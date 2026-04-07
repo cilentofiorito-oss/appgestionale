@@ -36,6 +36,14 @@ type Service = { id: string; name: string; durationMin: number; price: number; a
 
 type DashboardResponse = { ok: boolean; range: "day" | "week" | "month"; date: string; total: number; bookings: Booking[] };
 
+type ManualBookingForm = {
+  name: string;
+  phone: string;
+  serviceId: string;
+  time: string;
+  notes: string;
+};
+
 const DEFAULT_SETTINGS: BusinessSettings = {
   slotIntervalMin: 15,
   minAdvanceMin: 60,
@@ -76,6 +84,44 @@ function emptyService(): Service {
   return { id: "", name: "", durationMin: 30, price: 0, active: true };
 }
 
+function emptyManualBooking(defaultServiceId = ""): ManualBookingForm {
+  return { name: "", phone: "", serviceId: defaultServiceId, time: "", notes: "" };
+}
+
+function addMinutes(time: string, minutes: number) {
+  const [h, m] = String(time || "00:00").split(":").map(Number);
+  const total = (h || 0) * 60 + (m || 0) + minutes;
+  const hh = Math.floor(total / 60);
+  const mm = total % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+function windowsFromSettings(settings: BusinessSettings) {
+  const items: { key: string; start: string; end: string }[] = [];
+  if (settings.morningEnabled) items.push({ key: "morning", start: settings.morningOpen, end: settings.morningClose });
+  if (settings.afternoonEnabled) items.push({ key: "afternoon", start: settings.afternoonOpen, end: settings.afternoonClose });
+  return items.filter((item) => item.start && item.end && item.end > item.start);
+}
+
+function generateStartSlots(settings: BusinessSettings, durationMin: number) {
+  const slots: string[] = [];
+  const step = Number(settings.slotIntervalMin) || 15;
+
+  for (const window of windowsFromSettings(settings)) {
+    let current = window.start;
+    while (addMinutes(current, durationMin) <= window.end) {
+      slots.push(current);
+      current = addMinutes(current, step);
+    }
+  }
+
+  return Array.from(new Set(slots));
+}
+
+function overlapsRange(startA: string, endA: string, startB: string, endB: string) {
+  return startA < endB && endA > startB;
+}
+
 export default function GestionalePage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [username, setUsername] = useState("admin");
@@ -83,7 +129,7 @@ export default function GestionalePage() {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
-  const [tab, setTab] = useState<"dashboard" | "clienti" | "storico" | "servizi" | "impostazioni">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "calendario" | "clienti" | "storico" | "servizi" | "impostazioni">("dashboard");
   const [date, setDate] = useState(todayISO());
   const [range, setRange] = useState<"day" | "week" | "month">("day");
   const [loading, setLoading] = useState(true);
@@ -104,6 +150,15 @@ export default function GestionalePage() {
   const [savingService, setSavingService] = useState(false);
   const [deletingServiceId, setDeletingServiceId] = useState("");
 
+  const [calendarDate, setCalendarDate] = useState(todayISO());
+  const [calendarBookings, setCalendarBookings] = useState<Booking[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(true);
+  const [calendarMessage, setCalendarMessage] = useState("");
+  const [calendarDeletingId, setCalendarDeletingId] = useState("");
+  const [savingManualBooking, setSavingManualBooking] = useState(false);
+  const [manualBookingMessage, setManualBookingMessage] = useState("");
+  const [manualBooking, setManualBooking] = useState<ManualBookingForm>(emptyManualBooking());
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -118,6 +173,17 @@ export default function GestionalePage() {
     loadSettings();
     loadServices();
   }, [authenticated]);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    loadCalendarBookings(calendarDate);
+  }, [authenticated, calendarDate]);
+
+  useEffect(() => {
+    if (services.length > 0 && !manualBooking.serviceId) {
+      setManualBooking((prev) => ({ ...prev, serviceId: services.find((s) => s.active)?.id || services[0].id || "" }));
+    }
+  }, [services, manualBooking.serviceId]);
 
   async function checkAuth() {
     try {
@@ -164,6 +230,21 @@ export default function GestionalePage() {
       setMessage(e?.message || "Errore caricamento appuntamenti");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadCalendarBookings(targetDate = calendarDate) {
+    setCalendarLoading(true);
+    setCalendarMessage("");
+    try {
+      const res = await fetch(`/api/admin/bookings?date=${targetDate}&range=day`, { cache: "no-store" });
+      const data = await safeJson<DashboardResponse>(res);
+      setCalendarBookings(data.bookings || []);
+    } catch (e: any) {
+      setCalendarBookings([]);
+      setCalendarMessage(e?.message || "Errore caricamento calendario");
+    } finally {
+      setCalendarLoading(false);
     }
   }
 
@@ -257,10 +338,56 @@ export default function GestionalePage() {
       const res = await fetch(`/api/admin/bookings/${id}`, { method: "DELETE" });
       await safeJson(res);
       setBookings((prev) => prev.filter((item) => item.id !== id));
+      setCalendarBookings((prev) => prev.filter((item) => item.id !== id));
     } catch (e: any) {
       setMessage(e?.message || "Errore eliminazione appuntamento");
     } finally {
       setDeletingId("");
+    }
+  }
+
+  async function removeCalendarBooking(id: string) {
+    const ok = window.confirm("Vuoi disdire questo appuntamento dal calendario?");
+    if (!ok) return;
+    setCalendarDeletingId(id);
+    setManualBookingMessage("");
+    try {
+      const res = await fetch(`/api/admin/bookings/${id}`, { method: "DELETE" });
+      await safeJson(res);
+      setCalendarBookings((prev) => prev.filter((item) => item.id !== id));
+      setBookings((prev) => prev.filter((item) => item.id !== id));
+      setManualBookingMessage("Appuntamento disdetto con successo.");
+    } catch (e: any) {
+      setManualBookingMessage(e?.message || "Errore disdetta appuntamento");
+    } finally {
+      setCalendarDeletingId("");
+    }
+  }
+
+  async function createManualBooking() {
+    setSavingManualBooking(true);
+    setManualBookingMessage("");
+    try {
+      const res = await fetch("/api/admin/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...manualBooking, date: calendarDate }),
+      });
+      const data = await safeJson<{ ok: boolean; booking: Booking }>(res);
+      setManualBooking(emptyManualBooking(manualBooking.serviceId));
+      setManualBookingMessage("Appuntamento inserito manualmente con successo.");
+      if (data.booking) {
+        setCalendarBookings((prev) => [...prev, data.booking].sort((a, b) => a.startISO.localeCompare(b.startISO)));
+      } else {
+        await loadCalendarBookings(calendarDate);
+      }
+      if (date === calendarDate && range === "day") {
+        loadDashboard();
+      }
+    } catch (e: any) {
+      setManualBookingMessage(e?.message || "Errore creazione appuntamento");
+    } finally {
+      setSavingManualBooking(false);
     }
   }
 
@@ -311,6 +438,34 @@ export default function GestionalePage() {
     return Array.from(map.values()).sort((a, b) => b.totalBookings - a.totalBookings);
   }, [allBookingsSorted]);
 
+  const activeServices = useMemo(() => services.filter((service) => service.active), [services]);
+  const selectedService = useMemo(
+    () => activeServices.find((service) => service.id === manualBooking.serviceId) || activeServices[0] || null,
+    [activeServices, manualBooking.serviceId]
+  );
+
+  const availableCalendarSlots = useMemo(() => {
+    if (!selectedService) return [];
+    const baseSlots = generateStartSlots(settings, selectedService.durationMin);
+    return baseSlots.filter((slot) => {
+      const slotEnd = addMinutes(slot, selectedService.durationMin);
+      return !calendarBookings.some((booking) => overlapsRange(slot, slotEnd, booking.startLabel, booking.endLabel));
+    });
+  }, [settings, selectedService, calendarBookings]);
+
+  const bookedTimesMap = useMemo(() => {
+    const map = new Map<string, Booking>();
+    for (const booking of calendarBookings) {
+      map.set(booking.startLabel, booking);
+    }
+    return map;
+  }, [calendarBookings]);
+
+  const calendarTimeline = useMemo(() => {
+    const step = Number(settings.slotIntervalMin) || 15;
+    return generateStartSlots(settings, step).map((time) => ({ time, booking: bookedTimesMap.get(time) || null }));
+  }, [settings, bookedTimesMap]);
+
   if (authenticated === null) {
     return <main className="container wideContainer"><div className="card"><div className="badge info">Caricamento gestionale...</div></div></main>;
   }
@@ -347,7 +502,7 @@ export default function GestionalePage() {
       <header className="hero leftHero" style={{ marginBottom: 18 }}>
         <div className="brand leftBrand" style={{ width: "100%" }}>
           <div className="title">Gestionale ultima generazione</div>
-          <p className="subtitle">Appuntamenti, clienti, storico, servizi, prezzi e impostazioni avanzate.</p>
+          <p className="subtitle">Appuntamenti, clienti, calendario manuale, servizi, prezzi e impostazioni avanzate.</p>
         </div>
       </header>
 
@@ -356,6 +511,7 @@ export default function GestionalePage() {
           <div className="tabRow">
             {[
               ["dashboard", "Dashboard"],
+              ["calendario", "Calendario"],
               ["clienti", "Clienti"],
               ["storico", "Storico"],
               ["servizi", "Servizi & Prezzi"],
@@ -422,6 +578,134 @@ export default function GestionalePage() {
                       <div className="bookingActions">
                         {item.whatsappUrl && <a className="tabBtn secondaryBtn" href={item.whatsappUrl} target="_blank">WhatsApp</a>}
                         <button className="tabBtn dangerBtn" onClick={() => removeBooking(item.id)} disabled={deletingId === item.id}>{deletingId === item.id ? "Elimino..." : "Elimina"}</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        </>
+      )}
+
+      {tab === "calendario" && (
+        <>
+          <section className="card" style={{ marginBottom: 18 }}>
+            <div className="gridTwoCols">
+              <div>
+                <label>Data calendario</label>
+                <input type="date" value={calendarDate} onChange={(e) => setCalendarDate(e.target.value)} />
+              </div>
+              <div>
+                <label>Slot liberi per il servizio scelto</label>
+                <div className="badge info" style={{ marginTop: 10 }}>{availableCalendarSlots.length} slot disponibili</div>
+              </div>
+            </div>
+          </section>
+
+          <section className="gridTwoCols" style={{ alignItems: "start", gap: 18, marginBottom: 18 }}>
+            <div className="card">
+              <div className="grid">
+                <div className="sectionTitle">Nuovo appuntamento manuale</div>
+                {manualBookingMessage && <div className={`badge ${manualBookingMessage.includes("successo") ? "ok" : "error"}`}>{manualBookingMessage}</div>}
+                <div>
+                  <label>Nome cliente</label>
+                  <input value={manualBooking.name} onChange={(e) => setManualBooking({ ...manualBooking, name: e.target.value })} placeholder="Nome e cognome" />
+                </div>
+                <div>
+                  <label>Telefono</label>
+                  <input value={manualBooking.phone} onChange={(e) => setManualBooking({ ...manualBooking, phone: e.target.value })} placeholder="Numero cliente" />
+                </div>
+                <div>
+                  <label>Servizio</label>
+                  <select value={manualBooking.serviceId} onChange={(e) => setManualBooking({ ...manualBooking, serviceId: e.target.value, time: "" })}>
+                    <option value="">Seleziona servizio</option>
+                    {activeServices.map((service) => (
+                      <option key={service.id} value={service.id}>{service.name} · {service.durationMin} min · €{service.price}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label>Orario</label>
+                  <select value={manualBooking.time} onChange={(e) => setManualBooking({ ...manualBooking, time: e.target.value })}>
+                    <option value="">Seleziona orario</option>
+                    {availableCalendarSlots.map((slot) => (
+                      <option key={slot} value={slot}>{slot}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label>Note</label>
+                  <textarea value={manualBooking.notes} onChange={(e) => setManualBooking({ ...manualBooking, notes: e.target.value })} placeholder="Note appuntamento" rows={4} />
+                </div>
+                <button className="btn" onClick={createManualBooking} disabled={savingManualBooking || !manualBooking.serviceId || !manualBooking.time}>
+                  {savingManualBooking ? "Salvataggio..." : "Prendi appuntamento manualmente"}
+                </button>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="grid">
+                <div className="sectionTitle">Agenda del giorno</div>
+                {calendarMessage && <div className="badge error">{calendarMessage}</div>}
+                {calendarLoading ? (
+                  <div className="badge info">Caricamento agenda...</div>
+                ) : calendarBookings.length === 0 ? (
+                  <div className="badge info">Nessun appuntamento per questa giornata.</div>
+                ) : (
+                  <div className="bookingList">
+                    {calendarBookings.map((item) => (
+                      <div key={item.id} className="bookingCard">
+                        <div className="bookingTop">
+                          <div>
+                            <h3>{item.customerName}</h3>
+                            <p className="muted">{item.serviceName} · €{item.price}</p>
+                          </div>
+                          <div className="bookingTime">
+                            <strong>{item.startLabel} - {item.endLabel}</strong>
+                            <span className="muted">{item.dateLabel}</span>
+                          </div>
+                        </div>
+                        <div className="bookingMeta">
+                          <div><strong>Telefono:</strong> {item.phone || "—"}</div>
+                          <div><strong>Note:</strong> {item.notes || "—"}</div>
+                        </div>
+                        <div className="bookingActions">
+                          {item.whatsappUrl && <a className="tabBtn secondaryBtn" href={item.whatsappUrl} target="_blank">WhatsApp</a>}
+                          <button className="tabBtn dangerBtn" onClick={() => removeCalendarBooking(item.id)} disabled={calendarDeletingId === item.id}>{calendarDeletingId === item.id ? "Disdico..." : "Disdici"}</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="card">
+            <div className="grid">
+              <div className="sectionTitle">Vista calendario rapida</div>
+              {calendarTimeline.length === 0 ? (
+                <div className="badge info">Configura gli orari nelle impostazioni per vedere il calendario giornaliero.</div>
+              ) : (
+                <div className="bookingList">
+                  {calendarTimeline.map(({ time, booking }) => (
+                    <div key={time} className="holidayItem">
+                      <div>
+                        <strong>{time}</strong>
+                        <div className="muted">
+                          {booking ? `${booking.customerName} · ${booking.serviceName}` : "Slot libero"}
+                        </div>
+                      </div>
+                      <div className="bookingActions">
+                        {booking ? (
+                          <>
+                            {booking.whatsappUrl && <a className="tabBtn secondaryBtn" href={booking.whatsappUrl} target="_blank">WhatsApp</a>}
+                            <button className="tabBtn dangerBtn" onClick={() => removeCalendarBooking(booking.id)} disabled={calendarDeletingId === booking.id}>{calendarDeletingId === booking.id ? "Disdico..." : "Disdici"}</button>
+                          </>
+                        ) : (
+                          <button className="tabBtn secondaryBtn" onClick={() => setManualBooking((prev) => ({ ...prev, time }))}>Usa slot</button>
+                        )}
                       </div>
                     </div>
                   ))}
