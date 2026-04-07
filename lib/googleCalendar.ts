@@ -25,6 +25,21 @@ function getCalendar() {
   return google.calendar({ version: "v3", auth });
 }
 
+function isAlreadyDeletedGoogleError(error: any) {
+  const status = error?.code || error?.response?.status || error?.status;
+  const message = String(
+    error?.message || error?.response?.data?.error?.message || error?.response?.data?.message || ""
+  ).toLowerCase();
+
+  return (
+    status === 404 ||
+    status === 410 ||
+    message.includes("resource has been deleted") ||
+    message.includes("not found") ||
+    message.includes("deleted")
+  );
+}
+
 export function isGoogleCalendarConfigured() {
   return Boolean(
     process.env.GOOGLE_CLIENT_ID &&
@@ -89,6 +104,17 @@ export async function createBookingEvent(args: {
 
 export async function deleteBookingEvent(eventId: string) {
   const cal = getCalendar();
-  if (!cal || !eventId) return;
-  await cal.events.delete({ calendarId: CALENDAR_ID, eventId });
+  if (!cal || !eventId) {
+    return { ok: true, skipped: true };
+  }
+
+  try {
+    await cal.events.delete({ calendarId: CALENDAR_ID, eventId });
+    return { ok: true, deleted: true };
+  } catch (error: any) {
+    if (isAlreadyDeletedGoogleError(error)) {
+      return { ok: true, alreadyDeleted: true };
+    }
+    throw error;
+  }
 }

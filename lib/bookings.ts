@@ -76,9 +76,11 @@ function rowToBooking(row: BookingRow): BookingItem {
   };
 }
 
+const BOOKING_SELECT = "id,customer_name,phone,booking_date,booking_time,start_at,end_at,service_id,service_name,price,notes,status,summary,google_event_id";
+
 export async function listBookings(fromISO: string, toISO: string) {
   const rows = await supabaseSelect<BookingRow[]>("bookings", {
-    select: "id,customer_name,phone,booking_date,booking_time,start_at,end_at,service_id,service_name,price,notes,status,summary,google_event_id",
+    select: BOOKING_SELECT,
     start_at: `gte.${fromISO}`,
     end_at: `lt.${toISO}`,
     status: "neq.cancelled",
@@ -89,7 +91,7 @@ export async function listBookings(fromISO: string, toISO: string) {
 
 export async function listBookingsForDate(date: string) {
   const rows = await supabaseSelect<BookingRow[]>("bookings", {
-    select: "id,customer_name,phone,booking_date,booking_time,start_at,end_at,service_id,service_name,price,notes,status,summary,google_event_id",
+    select: BOOKING_SELECT,
     booking_date: `eq.${date}`,
     status: "neq.cancelled",
     order: "start_at.asc",
@@ -99,7 +101,7 @@ export async function listBookingsForDate(date: string) {
 
 export async function getBookingById(id: string) {
   const rows = await supabaseSelect<BookingRow[]>("bookings", {
-    select: "id,customer_name,phone,booking_date,booking_time,start_at,end_at,service_id,service_name,price,notes,status,summary,google_event_id",
+    select: BOOKING_SELECT,
     id: `eq.${id}`,
     limit: 1,
   });
@@ -122,13 +124,20 @@ export async function createBooking(input: {
   const summary = `${service.name} - ${input.name}`;
   const notes = String(input.notes || "").trim();
   const description =
-    `Cliente: ${input.name}\n` +
-    `Telefono: ${input.phone}\n` +
-    `Servizio: ${service.name}\n` +
-    `ServiceId: ${service.id}\n` +
-    `Prezzo: €${service.price}\n` +
-    `Data: ${input.date}\n` +
-    `Ora: ${input.time}\n` +
+    `Cliente: ${input.name}
+` +
+    `Telefono: ${input.phone}
+` +
+    `Servizio: ${service.name}
+` +
+    `ServiceId: ${service.id}
+` +
+    `Prezzo: €${service.price}
+` +
+    `Data: ${input.date}
+` +
+    `Ora: ${input.time}
+` +
     `Note: ${notes}`;
 
   const googleEventId = await createBookingEvent({
@@ -161,8 +170,13 @@ export async function markBookingCancelled(id: string) {
   const booking = await getBookingById(id);
   if (!booking) return null;
 
+  if (booking.status === "cancelled") {
+    return booking;
+  }
+
+  let googleResult: { ok?: boolean; skipped?: boolean; deleted?: boolean; alreadyDeleted?: boolean } | null = null;
   if (booking.googleEventId) {
-    await deleteBookingEvent(booking.googleEventId);
+    googleResult = await deleteBookingEvent(booking.googleEventId);
   }
 
   const rows = await supabasePatch<BookingRow[]>(
@@ -171,7 +185,13 @@ export async function markBookingCancelled(id: string) {
     { status: "cancelled", google_event_id: null }
   );
 
-  return rows?.[0] ? rowToBooking(rows[0]) : booking;
+  return rows?.[0]
+    ? rowToBooking(rows[0])
+    : {
+        ...booking,
+        status: "cancelled",
+        googleEventId: "",
+      };
 }
 
 export async function hardDeleteBooking(id: string) {

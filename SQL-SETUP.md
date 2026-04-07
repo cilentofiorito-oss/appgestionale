@@ -1,18 +1,14 @@
-# Setup SQL / Supabase
+# Setup SQL Barber App
 
-1. Apri Supabase > SQL Editor.
-2. Incolla tutto il contenuto di `supabase/schema.sql`.
-3. Esegui lo script.
-4. In Vercel aggiungi:
+1. Crea un progetto su Supabase.
+2. Apri SQL Editor e incolla il contenuto di `supabase/schema.sql`.
+3. In Settings > API copia:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
-5. Facoltativo per Google Calendar:
-   - `GOOGLE_CLIENT_ID`
-   - `GOOGLE_CLIENT_SECRET`
-   - `GOOGLE_REDIRECT_URI`
-   - `GOOGLE_REFRESH_TOKEN`
-   - `GOOGLE_CALENDAR_ID`
-6. Redeploy su Vercel.
+4. Inserisci le variabili in `.env.local` e su Vercel.
+5. Esegui un nuovo deploy.
 
-## Nota sul bug slot
-La disdetta adesso imposta la prenotazione a `cancelled` nel database e rimuove anche l'eventuale evento Google Calendar. Gli slot pubblici ignorano le prenotazioni `cancelled`, quindi tornano disponibili subito.
+## Note importanti
+- Le prenotazioni annullate vengono salvate con `status = cancelled`.
+- Gli slot pubblici leggono solo le prenotazioni attive, quindi uno slot torna disponibile subito dopo la disdetta.
+- Se l'evento su Google Calendar è già stato eliminato, il gestionale non va più in errore: il database viene comunque aggiornato correttamente.

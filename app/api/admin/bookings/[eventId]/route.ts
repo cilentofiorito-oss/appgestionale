@@ -10,8 +10,17 @@ export async function DELETE(_req: Request, { params }: { params: { eventId: str
   if (unauthorized) return unauthorized;
 
   try {
-    await deleteBooking(params.eventId);
-    return NextResponse.json({ ok: true, status: "cancelled" });
+    const booking = await deleteBooking(params.eventId);
+
+    if (!booking) {
+      return NextResponse.json({ error: "Appuntamento non trovato" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      status: "cancelled",
+      booking,
+    });
   } catch (error: any) {
     console.error("Admin bookings DELETE error:", error);
     return NextResponse.json({ error: error?.message || "Errore durante l'annullamento" }, { status: 500 });
