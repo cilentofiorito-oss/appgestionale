@@ -108,3 +108,81 @@ textarea{ resize: vertical; }
 }
 @media (max-width: 860px){ .statsRow{ grid-template-columns: repeat(2, minmax(0,1fr)); } .checkboxGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px){ .gridTwoCols{ grid-template-columns: 1fr; } .statsRow{ grid-template-columns: 1fr; } .bookingTop{ flex-direction:column; } .bookingTime{ align-items:flex-start; } .slots{ grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } .holidayRow{ grid-template-columns: 1fr; } }
+
+.gestionaleShell{ position: relative; }
+.sideMenuWrap{
+  position: fixed;
+  top: 22px;
+  right: 18px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+.menuToggle{
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(10,10,10,0.82);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.menuToggle span{
+  display:block;
+  height:2px;
+  border-radius:999px;
+  background: rgba(255,255,255,0.92);
+  transition: transform .18s ease, opacity .18s ease;
+}
+.menuToggle.open span:nth-child(1){ transform: translateY(8px) rotate(45deg); }
+.menuToggle.open span:nth-child(2){ opacity: 0; }
+.menuToggle.open span:nth-child(3){ transform: translateY(-8px) rotate(-45deg); }
+.sideMenuPanel{
+  width: min(320px, calc(100vw - 28px));
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(20,20,20,0.95), rgba(12,12,12,0.92));
+  box-shadow: var(--shadow);
+  transform: translateX(calc(100% + 18px));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .22s ease, opacity .22s ease;
+}
+.sideMenuPanel.show{
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.sideMenuHeader{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom: 12px;
+}
+.sideMenuList{ display:grid; gap:10px; }
+.sideMenuBtn{ width:100%; text-align:left; }
+.sideMenuLogout{ width:100%; margin-top:14px; }
+.calendarTopBar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin: 0 auto 8px;
+  max-width: 560px;
+}
+@media (max-width: 640px){
+  .sideMenuWrap{ top: 14px; right: 12px; }
+  .menuToggle{ width: 52px; height: 52px; border-radius: 16px; }
+  .calendarTopBar{ padding-right: 64px; }
+}

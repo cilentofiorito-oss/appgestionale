@@ -145,7 +145,8 @@ export default function GestionalePage() {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
-  const [tab, setTab] = useState<"dashboard" | "calendario" | "clienti" | "storico" | "servizi" | "impostazioni">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "calendario" | "clienti" | "storico" | "servizi" | "impostazioni">("calendario");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [date, setDate] = useState(todayISO());
   const [range, setRange] = useState<"day" | "week" | "month">("day");
   const [loading, setLoading] = useState(true);
@@ -527,32 +528,57 @@ export default function GestionalePage() {
     );
   }
 
-  return (
-    <main className="container wideContainer">
-      <header className="hero leftHero" style={{ marginBottom: 18 }}>
-        <div className="brand leftBrand" style={{ width: "100%" }}>
-          <div className="title">Gestionale ultima generazione</div>
-          <p className="subtitle">Appuntamenti, clienti, calendario manuale, servizi, prezzi e impostazioni avanzate.</p>
-        </div>
-      </header>
+  const menuItems: Array<{ value: "dashboard" | "clienti" | "storico" | "servizi" | "impostazioni"; label: string }> = [
+    { value: "dashboard", label: "Dashboard" },
+    { value: "clienti", label: "Clienti" },
+    { value: "storico", label: "Storico" },
+    { value: "servizi", label: "Servizi & Prezzi" },
+    { value: "impostazioni", label: "Impostazioni" },
+  ];
 
-      <section className="card" style={{ marginBottom: 18 }}>
-        <div className="tabRow" style={{ justifyContent: "space-between", alignItems: "center" }}>
-          <div className="tabRow">
-            {[
-              ["dashboard", "Dashboard"],
-              ["calendario", "Calendario"],
-              ["clienti", "Clienti"],
-              ["storico", "Storico"],
-              ["servizi", "Servizi & Prezzi"],
-              ["impostazioni", "Impostazioni"],
-            ].map(([value, label]) => (
-              <button key={value} className={`tabBtn ${tab === value ? "activeTab" : ""}`} onClick={() => setTab(value as any)}>{label}</button>
+  return (
+    <main className="container wideContainer gestionaleShell">
+      <div className="sideMenuWrap">
+        <button
+          className={`menuToggle ${menuOpen ? "open" : ""}`}
+          type="button"
+          onClick={() => setMenuOpen((prev) => !prev)}
+          aria-expanded={menuOpen}
+          aria-label="Apri menu gestionale"
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+
+        <aside className={`sideMenuPanel ${menuOpen ? "show" : ""}`}>
+          <div className="sideMenuHeader">
+            <div>
+              <div className="sectionTitle" style={{ marginTop: 0 }}>Menu gestionale</div>
+              <div className="muted">Calendario come home page</div>
+            </div>
+            <button className="tabBtn secondaryBtn" type="button" onClick={() => { setTab("calendario"); setMenuOpen(false); }}>Calendario</button>
+          </div>
+
+          <div className="sideMenuList">
+            {menuItems.map((item) => (
+              <button
+                key={item.value}
+                className={`tabBtn sideMenuBtn ${tab === item.value ? "activeTab" : ""}`}
+                type="button"
+                onClick={() => {
+                  setTab(item.value);
+                  setMenuOpen(false);
+                }}
+              >
+                {item.label}
+              </button>
             ))}
           </div>
-          <button className="tabBtn secondaryBtn" onClick={logout}>Esci</button>
-        </div>
-      </section>
+
+          <button className="tabBtn secondaryBtn sideMenuLogout" type="button" onClick={logout}>Esci</button>
+        </aside>
+      </div>
 
       {tab === "dashboard" && (
         <>
@@ -620,6 +646,14 @@ export default function GestionalePage() {
 
       {tab === "calendario" && (
         <>
+          <div className="calendarTopBar">
+            <div>
+              <div className="sectionTitle" style={{ marginTop: 0 }}>Calendario</div>
+              <div className="muted">Stessa interfaccia della web app con gestione manuale appuntamenti.</div>
+            </div>
+            <button className="tabBtn secondaryBtn" type="button" onClick={() => setMenuOpen((prev) => !prev)}>Menu</button>
+          </div>
+
           <main className="container" style={{ paddingTop: 0 }}>
             <header className="hero">
               <div className="logoWrap">
