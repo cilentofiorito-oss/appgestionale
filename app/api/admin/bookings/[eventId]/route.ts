@@ -11,9 +11,9 @@ export async function DELETE(_req: Request, { params }: { params: { eventId: str
 
   try {
     await deleteBooking(params.eventId);
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, status: "cancelled" });
   } catch (error: any) {
     console.error("Admin bookings DELETE error:", error);
-    return NextResponse.json({ error: error?.message || "Errore durante l'eliminazione" }, { status: 500 });
+    return NextResponse.json({ error: error?.message || "Errore durante l'annullamento" }, { status: 500 });
   }
 }

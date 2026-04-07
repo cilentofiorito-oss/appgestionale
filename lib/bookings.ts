@@ -160,10 +160,17 @@ export async function createBooking(input: {
 export async function markBookingCancelled(id: string) {
   const booking = await getBookingById(id);
   if (!booking) return null;
+
   if (booking.googleEventId) {
     await deleteBookingEvent(booking.googleEventId);
   }
-  const rows = await supabasePatch<BookingRow[]>("bookings", { id }, { status: "cancelled" });
+
+  const rows = await supabasePatch<BookingRow[]>(
+    "bookings",
+    { id },
+    { status: "cancelled", google_event_id: null }
+  );
+
   return rows?.[0] ? rowToBooking(rows[0]) : booking;
 }
 
@@ -173,4 +180,5 @@ export async function hardDeleteBooking(id: string) {
     await deleteBookingEvent(booking.googleEventId);
   }
   await supabaseDelete("bookings", { id });
+  return booking;
 }
