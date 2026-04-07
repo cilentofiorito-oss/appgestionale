@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
-import { google } from "googleapis";
 import { DateTime } from "luxon";
 import { getServiceById } from "@/lib/services";
 import {
@@ -12,24 +11,8 @@ import {
   readBusinessSettings,
   TIME_ZONE,
 } from "@/lib/business-settings";
-
-const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || process.env.CALENDAR_ID || "primary";
-
-function getAuth() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-
-  if (!clientId) throw new Error("Manca GOOGLE_CLIENT_ID");
-  if (!clientSecret) throw new Error("Manca GOOGLE_CLIENT_SECRET");
-  if (!redirectUri) throw new Error("Manca GOOGLE_REDIRECT_URI");
-  if (!refreshToken) throw new Error("Manca GOOGLE_REFRESH_TOKEN");
-
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-  return oauth2Client;
-}
+import { createBooking, listBookingsForDate } from "@/lib/bookings";
+import { getBusyIntervals } from "@/lib/googleCalendar";
 
 function overlaps(startA: DateTime, endA: DateTime, startB: DateTime, endB: DateTime) {
   return startA.toMillis() < endB.toMillis() && endA.toMillis() > startB.toMillis();
@@ -72,68 +55,49 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "L'orario scelto è fuori dagli orari di apertura configurati" }, { status: 400 });
     }
 
-    const auth = getAuth();
-    const calendar = google.calendar({ version: "v3", auth });
-
-    const freebusy = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: start.toISO()!,
-        timeMax: end.toISO()!,
-        timeZone: TIME_ZONE,
-        items: [{ id: CALENDAR_ID }],
-      },
+    const dayBookings = await listBookingsForDate(date);
+    const hasDbOverlap = dayBookings.some((booking) => {
+      const bookingStart = DateTime.fromISO(booking.startISO, { zone: TIME_ZONE });
+      const bookingEnd = DateTime.fromISO(booking.endISO, { zone: TIME_ZONE });
+      return overlaps(start, end, bookingStart, bookingEnd);
     });
 
-    const busy =
-      freebusy.data.calendars?.[CALENDAR_ID]?.busy?.map((b) => ({
-        start: DateTime.fromISO(b.start!, { zone: TIME_ZONE }),
-        end: DateTime.fromISO(b.end!, { zone: TIME_ZONE }),
-      })) || [];
-
-    const hasOverlap = busy.some((event) => overlaps(start, end, event.start, event.end));
-
-    if (hasOverlap) {
+    if (hasDbOverlap) {
       return NextResponse.json({ error: "Questo orario non è più disponibile" }, { status: 409 });
     }
 
-    const cleanNotes = String(notes || "").trim();
+    try {
+      const busyIntervals = await getBusyIntervals(start.toISO()!, end.toISO()!);
+      const hasGoogleOverlap = busyIntervals.some((item) => overlaps(
+        start,
+        end,
+        DateTime.fromMillis(item.startMs, { zone: TIME_ZONE }),
+        DateTime.fromMillis(item.endMs, { zone: TIME_ZONE })
+      ));
 
-    const event = await calendar.events.insert({
-      calendarId: CALENDAR_ID,
-      requestBody: {
-        summary: `${service.name} - ${name}`,
-        description:
-          `Cliente: ${name}\n` +
-          `Telefono: ${phone}\n` +
-          `Servizio: ${service.name}\n` +
-          `ServiceId: ${service.id}\n` +
-          `Prezzo: €${service.price}\n` +
-          `Data: ${date}\n` +
-          `Ora: ${time}\n` +
-          `Note: ${cleanNotes}`,
-        start: {
-          dateTime: start.toISO(),
-          timeZone: TIME_ZONE,
-        },
-        end: {
-          dateTime: end.toISO(),
-          timeZone: TIME_ZONE,
-        },
-      },
+      if (hasGoogleOverlap) {
+        return NextResponse.json({ error: "Questo orario non è più disponibile" }, { status: 409 });
+      }
+    } catch (error) {
+      console.error("Google overlap check error in /api/book:", error);
+    }
+
+    const booking = await createBooking({
+      name: String(name).trim(),
+      phone: String(phone).trim(),
+      date: String(date),
+      time: String(time),
+      serviceId: normalizedServiceId,
+      notes: String(notes || "").trim(),
     });
 
-    return NextResponse.json({ success: true, eventId: event.data.id });
+    return NextResponse.json({ success: true, bookingId: booking.id, googleEventId: booking.googleEventId || null });
   } catch (error: any) {
-    console.error("Booking error in /api/book:", {
-      message: error?.message,
-      stack: error?.stack,
-      response: error?.response?.data,
-    });
-
+    console.error("Booking error in /api/book:", error);
     return NextResponse.json(
       {
         error: "Errore durante la prenotazione",
-        details: error?.response?.data || error?.message || "Errore sconosciuto",
+        details: error?.message || "Errore sconosciuto",
       },
       { status: 500 }
     );

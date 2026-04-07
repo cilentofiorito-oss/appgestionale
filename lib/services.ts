@@ -1,5 +1,4 @@
-import { promises as fs } from "fs";
-import path from "path";
+import { supabaseDelete, supabaseSelect, supabaseUpsert } from "@/lib/supabase-rest";
 
 export type ServiceItem = {
   id: string;
@@ -15,8 +14,14 @@ export const DEFAULT_SERVICES: Record<string, ServiceItem> = {
   barba_taglio: { id: "barba_taglio", name: "Taglio + Barba", durationMin: 45, price: 30, active: true },
 };
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const SERVICES_FILE = path.join(DATA_DIR, "services.json");
+type ServiceRow = {
+  id: string;
+  name: string;
+  duration_min: number;
+  price: number;
+  active: boolean;
+  sort_order?: number | null;
+};
 
 function slugify(text: string) {
   return String(text || "")
@@ -37,30 +42,66 @@ function sanitizeService(input: Partial<ServiceItem>, fallbackId?: string): Serv
   return { id, name, durationMin, price, active };
 }
 
-function normalizeServices(input: any): Record<string, ServiceItem> {
-  if (!input || typeof input !== "object") return { ...DEFAULT_SERVICES };
-  const result: Record<string, ServiceItem> = {};
-  for (const [key, value] of Object.entries(input)) {
-    const item = sanitizeService(value as Partial<ServiceItem>, key);
-    result[item.id] = item;
-  }
-  return Object.keys(result).length ? result : { ...DEFAULT_SERVICES };
+function rowToService(row: ServiceRow): ServiceItem {
+  return sanitizeService({
+    id: row.id,
+    name: row.name,
+    durationMin: row.duration_min,
+    price: Number(row.price || 0),
+    active: row.active,
+  });
+}
+
+function serviceToRow(input: ServiceItem): ServiceRow {
+  return {
+    id: input.id,
+    name: input.name,
+    duration_min: input.durationMin,
+    price: input.price,
+    active: input.active,
+  };
+}
+
+async function ensureDefaultServicesIfEmpty() {
+  const existing = await supabaseSelect<ServiceRow[]>("services", {
+    select: "id,name,duration_min,price,active,sort_order",
+    order: "sort_order.asc.nullslast,name.asc",
+  });
+
+  if (existing.length > 0) return existing;
+
+  const defaults = Object.values(DEFAULT_SERVICES).map((service, index) => ({
+    ...serviceToRow(service),
+    sort_order: index + 1,
+  }));
+
+  return await supabaseUpsert<ServiceRow[]>("services", defaults, "id");
 }
 
 export async function readServicesMap() {
   try {
-    const raw = await fs.readFile(SERVICES_FILE, "utf8");
-    return normalizeServices(JSON.parse(raw));
+    const rows = await ensureDefaultServicesIfEmpty();
+    const result: Record<string, ServiceItem> = {};
+    for (const row of rows) {
+      const item = rowToService(row);
+      result[item.id] = item;
+    }
+    return result;
   } catch {
     return { ...DEFAULT_SERVICES };
   }
 }
 
 export async function saveServicesMap(input: Record<string, ServiceItem>) {
-  const normalized = normalizeServices(input);
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(SERVICES_FILE, JSON.stringify(normalized, null, 2), "utf8");
-  return normalized;
+  const items = Object.values(input).map((item) => sanitizeService(item));
+  const rows = items.map((item, index) => ({ ...serviceToRow(item), sort_order: index + 1 }));
+  const saved = await supabaseUpsert<ServiceRow[]>("services", rows, "id");
+  const result: Record<string, ServiceItem> = {};
+  for (const row of saved) {
+    const item = rowToService(row);
+    result[item.id] = item;
+  }
+  return result;
 }
 
 export async function readServicesList(includeInactive = false) {
@@ -70,20 +111,28 @@ export async function readServicesList(includeInactive = false) {
 }
 
 export async function getServiceById(serviceId: string) {
-  const map = await readServicesMap();
-  return map[String(serviceId || "").trim().toLowerCase()] || null;
+  const id = String(serviceId || "").trim().toLowerCase();
+  if (!id) return null;
+  try {
+    const rows = await supabaseSelect<ServiceRow[]>("services", {
+      select: "id,name,duration_min,price,active,sort_order",
+      id: `eq.${id}`,
+      limit: 1,
+    });
+    const row = rows?.[0];
+    return row ? rowToService(row) : null;
+  } catch {
+    const map = await readServicesMap();
+    return map[id] || null;
+  }
 }
 
 export async function upsertService(input: Partial<ServiceItem>) {
-  const map = await readServicesMap();
   const item = sanitizeService(input, input.id);
-  map[item.id] = item;
-  await saveServicesMap(map);
-  return item;
+  const rows = await supabaseUpsert<ServiceRow[]>("services", serviceToRow(item), "id");
+  return rowToService(rows?.[0] || serviceToRow(item));
 }
 
 export async function deleteService(serviceId: string) {
-  const map = await readServicesMap();
-  delete map[String(serviceId || "").trim().toLowerCase()];
-  await saveServicesMap(map);
+  await supabaseDelete("services", { id: String(serviceId || "").trim().toLowerCase() });
 }

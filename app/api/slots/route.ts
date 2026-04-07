@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
-import { google } from "googleapis";
 import { DateTime } from "luxon";
 import { getServiceById } from "@/lib/services";
 import {
@@ -13,24 +12,8 @@ import {
   readBusinessSettings,
   TIME_ZONE,
 } from "@/lib/business-settings";
-
-const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || process.env.CALENDAR_ID || "primary";
-
-function getAuth() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-
-  if (!clientId) throw new Error("Manca GOOGLE_CLIENT_ID");
-  if (!clientSecret) throw new Error("Manca GOOGLE_CLIENT_SECRET");
-  if (!redirectUri) throw new Error("Manca GOOGLE_REDIRECT_URI");
-  if (!refreshToken) throw new Error("Manca GOOGLE_REFRESH_TOKEN");
-
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-  return oauth2Client;
-}
+import { listBookingsForDate } from "@/lib/bookings";
+import { getBusyIntervals, isGoogleCalendarConfigured } from "@/lib/googleCalendar";
 
 function overlaps(startA: DateTime, endA: DateTime, startB: DateTime, endB: DateTime) {
   return startA.toMillis() < endB.toMillis() && endA.toMillis() > startB.toMillis();
@@ -56,7 +39,7 @@ export async function GET(req: Request) {
     const settings = await readBusinessSettings();
 
     if (isClosedDate(date, settings)) {
-      return NextResponse.json({ date, serviceId, slots: [], closed: true, googleOk: true, settings });
+      return NextResponse.json({ date, serviceId, slots: [], closed: true, googleOk: isGoogleCalendarConfigured(), settings });
     }
 
     const dayStart = DateTime.fromISO(`${date}T00:00:00`, { zone: TIME_ZONE });
@@ -66,24 +49,24 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Data non valida" }, { status: 400 });
     }
 
-    const auth = getAuth();
-    const calendar = google.calendar({ version: "v3", auth });
+    const dayBookings = await listBookingsForDate(date);
+    const dbBusy = dayBookings.map((booking) => ({
+      start: DateTime.fromISO(booking.startISO, { zone: TIME_ZONE }),
+      end: DateTime.fromISO(booking.endISO, { zone: TIME_ZONE }),
+    }));
 
-    const freebusy = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: dayStart.toISO()!,
-        timeMax: dayEnd.toISO()!,
-        timeZone: TIME_ZONE,
-        items: [{ id: CALENDAR_ID }],
-      },
-    });
+    let googleBusy: { start: DateTime; end: DateTime }[] = [];
+    try {
+      const externalBusy = await getBusyIntervals(dayStart.toISO()!, dayEnd.toISO()!);
+      googleBusy = externalBusy.map((item) => ({
+        start: DateTime.fromMillis(item.startMs, { zone: TIME_ZONE }),
+        end: DateTime.fromMillis(item.endMs, { zone: TIME_ZONE }),
+      }));
+    } catch (error) {
+      console.error("Google freebusy error in /api/slots:", error);
+    }
 
-    const busy =
-      freebusy.data.calendars?.[CALENDAR_ID]?.busy?.map((b) => ({
-        start: DateTime.fromISO(b.start!, { zone: TIME_ZONE }),
-        end: DateTime.fromISO(b.end!, { zone: TIME_ZONE }),
-      })) || [];
-
+    const busy = [...dbBusy, ...googleBusy];
     const candidates = generateCandidateSlots(date, settings);
 
     const validSlots = candidates.filter((slot) => {
@@ -98,19 +81,14 @@ export async function GET(req: Request) {
       return !hasOverlap;
     });
 
-    return NextResponse.json({ date, serviceId, slots: validSlots, googleOk: true, settings });
+    return NextResponse.json({ date, serviceId, slots: validSlots, googleOk: isGoogleCalendarConfigured(), settings });
   } catch (error: any) {
-    console.error("Google freebusy error in /api/slots:", {
-      message: error?.message,
-      stack: error?.stack,
-      response: error?.response?.data,
-    });
-
+    console.error("Slots error in /api/slots:", error);
     return NextResponse.json(
       {
         error: "Errore nel recupero slot",
-        details: error?.response?.data || error?.message || "Errore sconosciuto",
-        googleOk: false,
+        details: error?.message || "Errore sconosciuto",
+        googleOk: isGoogleCalendarConfigured(),
       },
       { status: 500 }
     );

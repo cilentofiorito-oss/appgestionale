@@ -1,0 +1,82 @@
+create extension if not exists pgcrypto;
+
+create table if not exists public.business_settings (
+  id text primary key,
+  slot_interval_min integer not null default 15 check (slot_interval_min in (15, 30)),
+  min_advance_min integer not null default 60 check (min_advance_min >= 0),
+  closed_weekdays jsonb not null default '[1,7]'::jsonb,
+  holidays jsonb not null default '[]'::jsonb,
+  morning_enabled boolean not null default true,
+  morning_open text not null default '09:00',
+  morning_close text not null default '13:00',
+  afternoon_enabled boolean not null default true,
+  afternoon_open text not null default '15:30',
+  afternoon_close text not null default '20:00',
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.services (
+  id text primary key,
+  name text not null,
+  duration_min integer not null check (duration_min > 0),
+  price numeric(10,2) not null default 0,
+  active boolean not null default true,
+  sort_order integer,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.bookings (
+  id uuid primary key default gen_random_uuid(),
+  customer_name text not null,
+  phone text not null,
+  booking_date date not null,
+  booking_time text not null,
+  start_at timestamptz not null,
+  end_at timestamptz not null,
+  service_id text not null references public.services(id) on update cascade,
+  service_name text not null,
+  price numeric(10,2) not null default 0,
+  notes text,
+  status text not null default 'confirmed',
+  summary text,
+  google_event_id text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists bookings_date_idx on public.bookings (booking_date);
+create index if not exists bookings_start_idx on public.bookings (start_at);
+
+insert into public.business_settings (
+  id,
+  slot_interval_min,
+  min_advance_min,
+  closed_weekdays,
+  holidays,
+  morning_enabled,
+  morning_open,
+  morning_close,
+  afternoon_enabled,
+  afternoon_open,
+  afternoon_close
+)
+values (
+  'default',
+  15,
+  60,
+  '[1,7]'::jsonb,
+  '[]'::jsonb,
+  true,
+  '09:00',
+  '13:00',
+  true,
+  '15:30',
+  '20:00'
+)
+on conflict (id) do nothing;
+
+insert into public.services (id, name, duration_min, price, active, sort_order)
+values
+  ('barba', 'Barba', 15, 10, true, 1),
+  ('taglio', 'Taglio', 30, 20, true, 2),
+  ('barba_taglio', 'Taglio + Barba', 45, 30, true, 3)
+on conflict (id) do nothing;

@@ -1,4 +1,8 @@
 import { google } from "googleapis";
+import { DateTime } from "luxon";
+
+export const TIME_ZONE = "Europe/Rome";
+const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || process.env.CALENDAR_ID || "primary";
 
 function getOAuth2Client() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -6,52 +10,53 @@ function getOAuth2Client() {
   const redirectUri = process.env.GOOGLE_REDIRECT_URI;
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
 
-  if (!clientId) throw new Error("GOOGLE_CLIENT_ID mancante");
-  if (!clientSecret) throw new Error("GOOGLE_CLIENT_SECRET mancante");
-  if (!redirectUri) throw new Error("GOOGLE_REDIRECT_URI mancante");
-  if (!refreshToken) throw new Error("GOOGLE_REFRESH_TOKEN mancante");
+  if (!clientId || !clientSecret || !redirectUri || !refreshToken) {
+    return null;
+  }
 
-  const oauth2Client = new google.auth.OAuth2(
-    clientId,
-    clientSecret,
-    redirectUri
-  );
-
-  oauth2Client.setCredentials({
-    refresh_token: refreshToken,
-  });
-
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
   return oauth2Client;
 }
 
 function getCalendar() {
-  return google.calendar({
-    version: "v3",
-    auth: getOAuth2Client(),
-  });
+  const auth = getOAuth2Client();
+  if (!auth) return null;
+  return google.calendar({ version: "v3", auth });
+}
+
+export function isGoogleCalendarConfigured() {
+  return Boolean(
+    process.env.GOOGLE_CLIENT_ID &&
+      process.env.GOOGLE_CLIENT_SECRET &&
+      process.env.GOOGLE_REDIRECT_URI &&
+      process.env.GOOGLE_REFRESH_TOKEN
+  );
 }
 
 export async function getBusyIntervals(
   timeMinISO: string,
   timeMaxISO: string
 ): Promise<{ startMs: number; endMs: number }[]> {
-  const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
   const cal = getCalendar();
+  if (!cal) return [];
 
   const resp = await cal.freebusy.query({
     requestBody: {
       timeMin: timeMinISO,
       timeMax: timeMaxISO,
-      items: [{ id: calendarId }],
+      timeZone: TIME_ZONE,
+      items: [{ id: CALENDAR_ID }],
     },
   });
 
-  const busy = resp.data.calendars?.[calendarId]?.busy || [];
-
-  return busy.map((b) => ({
-    startMs: new Date(b.start!).getTime(),
-    endMs: new Date(b.end!).getTime(),
-  }));
+  const busy = resp.data.calendars?.[CALENDAR_ID]?.busy || [];
+  return busy
+    .filter((b) => b.start && b.end)
+    .map((b) => ({
+      startMs: DateTime.fromISO(b.start!, { zone: TIME_ZONE }).toMillis(),
+      endMs: DateTime.fromISO(b.end!, { zone: TIME_ZONE }).toMillis(),
+    }));
 }
 
 export async function createBookingEvent(args: {
@@ -60,24 +65,30 @@ export async function createBookingEvent(args: {
   startDateTimeLocal: string;
   endDateTimeLocal: string;
 }) {
-  const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
   const cal = getCalendar();
+  if (!cal) return null;
 
   const res = await cal.events.insert({
-    calendarId,
+    calendarId: CALENDAR_ID,
     requestBody: {
       summary: args.summary,
       description: args.description || "",
       start: {
         dateTime: args.startDateTimeLocal,
-        timeZone: "Europe/Rome",
+        timeZone: TIME_ZONE,
       },
       end: {
         dateTime: args.endDateTimeLocal,
-        timeZone: "Europe/Rome",
+        timeZone: TIME_ZONE,
       },
     },
   });
 
-  return res.data.id!;
+  return res.data.id || null;
+}
+
+export async function deleteBookingEvent(eventId: string) {
+  const cal = getCalendar();
+  if (!cal || !eventId) return;
+  await cal.events.delete({ calendarId: CALENDAR_ID, eventId });
 }
