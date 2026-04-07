@@ -131,6 +131,13 @@ function overlapsRange(startA: string, endA: string, startB: string, endB: strin
   return startA < endB && endA > startB;
 }
 
+function isPastSlot(dateISO: string, time: string) {
+  const [year, month, day] = dateISO.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  const slotDate = new Date(year || 0, (month || 1) - 1, day || 1, hour || 0, minute || 0, 0, 0);
+  return slotDate.getTime() <= Date.now();
+}
+
 export default function GestionalePage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [username, setUsername] = useState("admin");
@@ -468,10 +475,11 @@ export default function GestionalePage() {
     if (!selectedService) return [];
     const baseSlots = generateStartSlots(settings, selectedService.durationMin);
     return baseSlots.filter((slot) => {
+      if (isPastSlot(calendarDate, slot)) return false;
       const slotEnd = addMinutes(slot, selectedService.durationMin);
       return !calendarBookings.some((booking) => overlapsRange(slot, slotEnd, booking.startLabel, booking.endLabel));
     });
-  }, [settings, selectedService, calendarBookings]);
+  }, [settings, selectedService, calendarBookings, calendarDate]);
 
   const bookedTimesMap = useMemo(() => {
     const map = new Map<string, Booking>();
@@ -483,8 +491,10 @@ export default function GestionalePage() {
 
   const calendarTimeline = useMemo(() => {
     const step = Number(settings.slotIntervalMin) || 15;
-    return generateStartSlots(settings, step).map((time) => ({ time, booking: bookedTimesMap.get(time) || null }));
-  }, [settings, bookedTimesMap]);
+    return generateStartSlots(settings, step)
+      .filter((time) => !isPastSlot(calendarDate, time) || bookedTimesMap.has(time))
+      .map((time) => ({ time, booking: bookedTimesMap.get(time) || null }));
+  }, [settings, bookedTimesMap, calendarDate]);
 
   if (authenticated === null) {
     return <main className="container wideContainer"><div className="card"><div className="badge info">Caricamento gestionale...</div></div></main>;
