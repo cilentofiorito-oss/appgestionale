@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 type Booking = {
@@ -373,8 +374,19 @@ export default function GestionalePage() {
   }
 
   async function createManualBooking() {
-    setSavingManualBooking(true);
     setManualBookingMessage("");
+
+    if (!manualBooking.time) {
+      setManualBookingMessage("Seleziona un orario.");
+      return;
+    }
+
+    if (!manualBooking.name.trim() || !manualBooking.phone.trim()) {
+      setManualBookingMessage("Inserisci nome e telefono.");
+      return;
+    }
+
+    setSavingManualBooking(true);
     try {
       const res = await fetch("/api/admin/bookings", {
         method: "POST",
@@ -383,7 +395,7 @@ export default function GestionalePage() {
       });
       const data = await safeJson<{ ok: boolean; booking: Booking }>(res);
       setManualBooking(emptyManualBooking(manualBooking.serviceId));
-      setManualBookingMessage("Appuntamento inserito manualmente con successo.");
+      setManualBookingMessage("Prenotazione confermata con successo.");
       if (data.booking) {
         setCalendarBookings((prev) => [...prev, data.booking].sort((a, b) => a.startISO.localeCompare(b.startISO)));
       } else {
@@ -393,7 +405,7 @@ export default function GestionalePage() {
         loadDashboard();
       }
     } catch (e: any) {
-      setManualBookingMessage(e?.message || "Errore creazione appuntamento");
+      setManualBookingMessage(e?.message || "Errore prenotazione");
     } finally {
       setSavingManualBooking(false);
     }
@@ -598,85 +610,93 @@ export default function GestionalePage() {
 
       {tab === "calendario" && (
         <>
-          <header className="hero" style={{ paddingTop: 6, paddingBottom: 4 }}>
-            <div className="brand">
-              <div className="title" style={{ fontSize: 24 }}>Calendario manuale</div>
-              <p className="subtitle">Stessa esperienza della web app, ma dedicata al titolare per inserire e disdire appuntamenti manualmente.</p>
-            </div>
-          </header>
+          <main className="container" style={{ paddingTop: 0 }}>
+            <header className="hero">
+              <div className="logoWrap">
+                <Image src="/icons/icon-512.png" width={120} height={120} alt="Ringhio" priority />
+              </div>
 
-          <section className="card" style={{ marginBottom: 18 }}>
-            <div className="grid">
-              <div className="gridTwoCols">
+              <div className="brand">
+                <div className="title">Ringhio BarberShop</div>
+                <p className="subtitle">Prenota il tuo appuntamento in pochi secondi</p>
+              </div>
+            </header>
+
+            <section className="card" style={{ marginBottom: 18 }}>
+              <div className="grid">
+                {manualBookingMessage && <div className={`badge ${manualBookingMessage.includes("successo") || manualBookingMessage.includes("confermata") ? "ok" : "error"}`}>{manualBookingMessage}</div>}
+
                 <div>
                   <label>Servizio</label>
-                  <select value={manualBooking.serviceId} onChange={(e) => setManualBooking({ ...manualBooking, serviceId: e.target.value, time: "" })}>
-                    <option value="">Seleziona servizio</option>
-                    {activeServices.map((service) => (
-                      <option key={service.id} value={service.id}>{service.name} ({service.durationMin} min · €{service.price})</option>
-                    ))}
-                  </select>
+                  {servicesLoading ? (
+                    <div className="badge info">Caricamento servizi...</div>
+                  ) : (
+                    <select value={manualBooking.serviceId} onChange={(e) => setManualBooking({ ...manualBooking, serviceId: e.target.value, time: "" })}>
+                      {activeServices.map((service) => (
+                        <option key={service.id} value={service.id}>{service.name} ({service.durationMin} min · €{service.price})</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
+
                 <div>
                   <label>Data</label>
                   <input type="date" value={calendarDate} onChange={(e) => setCalendarDate(e.target.value)} />
                 </div>
+
+                <div>
+                  <label>Orari disponibili</label>
+                  {calendarLoading ? (
+                    <div className="badge info">Caricamento...</div>
+                  ) : !manualBooking.serviceId ? (
+                    <div className="badge info">Seleziona un servizio</div>
+                  ) : availableCalendarSlots.length === 0 ? (
+                    <div className="badge info">Nessuno slot disponibile</div>
+                  ) : (
+                    <div className="slots">
+                      {availableCalendarSlots.map((slot) => (
+                        <button
+                          key={slot}
+                          className={`slot ${manualBooking.time === slot ? "active" : ""}`}
+                          onClick={() => setManualBooking((prev) => ({ ...prev, time: slot }))}
+                          type="button"
+                        >
+                          {slot}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label>Nome</label>
+                  <input value={manualBooking.name} onChange={(e) => setManualBooking({ ...manualBooking, name: e.target.value })} />
+                </div>
+
+                <div>
+                  <label>Telefono</label>
+                  <input value={manualBooking.phone} onChange={(e) => setManualBooking({ ...manualBooking, phone: e.target.value })} />
+                </div>
+
+                <div>
+                  <label>Note</label>
+                  <textarea rows={3} value={manualBooking.notes} onChange={(e) => setManualBooking({ ...manualBooking, notes: e.target.value })} />
+                </div>
+
+                <button className="btn" onClick={createManualBooking} disabled={savingManualBooking || !selectedService}>
+                  {savingManualBooking ? "Prenotazione..." : "Conferma prenotazione"}
+                </button>
               </div>
+            </section>
 
-              <div className="badge info">
-                Orari configurati: {hoursLabel(settings)} · intervallo slot {settings?.slotIntervalMin || 15} min · {availableCalendarSlots.length} slot disponibili
-              </div>
-
-              {manualBookingMessage && <div className={`badge ${manualBookingMessage.includes("successo") ? "ok" : "error"}`}>{manualBookingMessage}</div>}
-
-              <div>
-                <label>Orari disponibili</label>
-                {calendarLoading ? (
-                  <div className="badge info">Caricamento agenda...</div>
-                ) : !manualBooking.serviceId ? (
-                  <div className="badge info">Seleziona prima un servizio.</div>
-                ) : availableCalendarSlots.length === 0 ? (
-                  <div className="badge info">Nessuno slot disponibile per il servizio selezionato.</div>
-                ) : (
-                  <div className="slots">
-                    {availableCalendarSlots.map((slot) => (
-                      <button
-                        key={slot}
-                        type="button"
-                        className={`slot ${manualBooking.time === slot ? "active" : ""}`}
-                        onClick={() => setManualBooking((prev) => ({ ...prev, time: slot }))}
-                      >
-                        {slot}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label>Nome</label>
-                <input value={manualBooking.name} onChange={(e) => setManualBooking({ ...manualBooking, name: e.target.value })} placeholder="Nome e cognome" />
-              </div>
-
-              <div>
-                <label>Telefono</label>
-                <input value={manualBooking.phone} onChange={(e) => setManualBooking({ ...manualBooking, phone: e.target.value })} placeholder="Numero cliente" />
-              </div>
-
-              <div>
-                <label>Note</label>
-                <textarea value={manualBooking.notes} onChange={(e) => setManualBooking({ ...manualBooking, notes: e.target.value })} placeholder="Note appuntamento" rows={3} />
-              </div>
-
-              <button className="btn" onClick={createManualBooking} disabled={savingManualBooking || !manualBooking.serviceId || !manualBooking.time}>
-                {savingManualBooking ? "Prenotazione..." : "Conferma prenotazione manuale"}
-              </button>
+            <div className="footer" style={{ marginBottom: 18 }}>
+              Orari configurati: {hoursLabel(settings)} · intervallo slot {settings?.slotIntervalMin || 15} min · <a href="/gestionale" onClick={(e) => e.preventDefault()}>Apri gestionale</a>
             </div>
-          </section>
+          </main>
 
-          <section className="card" style={{ marginBottom: 18 }}>
+          <section className="card">
             <div className="grid">
-              <div className="sectionTitle">Agenda del giorno</div>
+              <div className="sectionTitle">Appuntamenti del giorno</div>
               {calendarMessage && <div className="badge error">{calendarMessage}</div>}
               {calendarLoading ? (
                 <div className="badge info">Caricamento agenda...</div>
@@ -703,38 +723,6 @@ export default function GestionalePage() {
                       <div className="bookingActions">
                         {item.whatsappUrl && <a className="tabBtn secondaryBtn" href={item.whatsappUrl} target="_blank">WhatsApp</a>}
                         <button className="tabBtn dangerBtn" onClick={() => removeCalendarBooking(item.id)} disabled={calendarDeletingId === item.id}>{calendarDeletingId === item.id ? "Disdico..." : "Disdici"}</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="card">
-            <div className="grid">
-              <div className="sectionTitle">Vista calendario rapida</div>
-              {calendarTimeline.length === 0 ? (
-                <div className="badge info">Configura gli orari nelle impostazioni per vedere il calendario giornaliero.</div>
-              ) : (
-                <div className="bookingList">
-                  {calendarTimeline.map(({ time, booking }) => (
-                    <div key={time} className="holidayItem">
-                      <div>
-                        <strong>{time}</strong>
-                        <div className="muted">
-                          {booking ? `${booking.customerName} · ${booking.serviceName}` : "Slot libero"}
-                        </div>
-                      </div>
-                      <div className="bookingActions">
-                        {booking ? (
-                          <>
-                            {booking.whatsappUrl && <a className="tabBtn secondaryBtn" href={booking.whatsappUrl} target="_blank">WhatsApp</a>}
-                            <button className="tabBtn dangerBtn" onClick={() => removeCalendarBooking(booking.id)} disabled={calendarDeletingId === booking.id}>{calendarDeletingId === booking.id ? "Disdico..." : "Disdici"}</button>
-                          </>
-                        ) : (
-                          <button className="tabBtn secondaryBtn" onClick={() => setManualBooking((prev) => ({ ...prev, time }))}>Usa slot</button>
-                        )}
                       </div>
                     </div>
                   ))}
