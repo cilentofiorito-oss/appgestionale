@@ -30,11 +30,19 @@ export async function DELETE(req: Request) {
   if (unauthorized) return unauthorized;
   try {
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id") || "";
+    let id = searchParams.get("id") || "";
+
+    if (!id) {
+      try {
+        const body = await req.json();
+        id = String(body?.id || "").trim();
+      } catch {}
+    }
+
     if (!id) return NextResponse.json({ error: "ID servizio mancante" }, { status: 400 });
-    await deleteService(id);
+    const result = await deleteService(id);
     const services = await readServicesList(true);
-    return NextResponse.json({ ok: true, services });
+    return NextResponse.json({ ok: true, services, result });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "Errore eliminazione servizio" }, { status: 500 });
   }

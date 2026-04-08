@@ -1,4 +1,4 @@
-import { supabaseDelete, supabaseSelect, supabaseUpsert } from "@/lib/supabase-rest";
+import { supabaseDelete, supabasePatch, supabaseSelect, supabaseUpsert } from "@/lib/supabase-rest";
 
 export type ServiceItem = {
   id: string;
@@ -134,5 +134,26 @@ export async function upsertService(input: Partial<ServiceItem>) {
 }
 
 export async function deleteService(serviceId: string) {
-  await supabaseDelete("services", { id: String(serviceId || "").trim().toLowerCase() });
+  const id = String(serviceId || "").trim().toLowerCase();
+  if (!id) throw new Error("ID servizio mancante");
+
+  try {
+    await supabaseDelete("services", { id });
+    return { deleted: true, deactivated: false };
+  } catch (error: any) {
+    const message = String(error?.message || "").toLowerCase();
+    const likelyReferenced =
+      message.includes("foreign key") ||
+      message.includes("violates") ||
+      message.includes("constraint") ||
+      message.includes("bookings") ||
+      message.includes("appointments");
+
+    if (!likelyReferenced) {
+      throw error;
+    }
+
+    await supabasePatch("services", { id }, { active: false });
+    return { deleted: false, deactivated: true };
+  }
 }

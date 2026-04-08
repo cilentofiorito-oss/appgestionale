@@ -3,7 +3,7 @@ export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import { DateTime } from "luxon";
-import { listBookings, TIME_ZONE, createAdminBooking } from "@/lib/admin-calendar";
+import { listBookings, TIME_ZONE, createAdminBooking, deleteBooking } from "@/lib/admin-calendar";
 import { requireAdmin } from "@/lib/admin-auth";
 
 export async function GET(req: Request) {
@@ -52,5 +52,38 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Admin bookings POST error:", error);
     return NextResponse.json({ error: error?.message || "Errore creazione appuntamento" }, { status: 500 });
+  }
+}
+
+
+export async function DELETE(req: Request) {
+  const unauthorized = await requireAdmin();
+  if (unauthorized) return unauthorized;
+
+  try {
+    const url = new URL(req.url);
+    let id = url.searchParams.get("id") || "";
+
+    if (!id) {
+      try {
+        const body = await req.json();
+        id = String(body?.id || "").trim();
+      } catch {}
+    }
+
+    if (!id) {
+      return NextResponse.json({ error: "ID appuntamento mancante" }, { status: 400 });
+    }
+
+    const booking = await deleteBooking(id);
+
+    if (!booking) {
+      return NextResponse.json({ error: "Appuntamento non trovato" }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, status: "cancelled", booking });
+  } catch (error: any) {
+    console.error("Admin bookings DELETE error:", error);
+    return NextResponse.json({ error: error?.message || "Errore durante l'annullamento" }, { status: 500 });
   }
 }

@@ -350,10 +350,11 @@ export default function GestionalePage() {
     if (!ok) return;
     setDeletingServiceId(id);
     try {
-      const res = await fetch(`/api/admin/services?id=${id}`, { method: "DELETE" });
-      const data = await safeJson<{ ok: boolean; services: Service[] }>(res);
+      const res = await fetch(`/api/admin/services?id=${encodeURIComponent(id)}`, { method: "DELETE", cache: "no-store" });
+      const data = await safeJson<{ ok: boolean; services: Service[]; result?: { deleted?: boolean; deactivated?: boolean } }>(res);
       setServices(data.services || []);
       if (serviceForm.id === id) setServiceForm(emptyService());
+      setServicesMessage(data?.result?.deactivated ? "Servizio disattivato perché già collegato a prenotazioni esistenti." : "Servizio rimosso con successo.");
     } catch (e: any) {
       setServicesMessage(e?.message || "Errore eliminazione servizio");
     } finally {
@@ -366,7 +367,7 @@ export default function GestionalePage() {
     if (!ok) return;
     setDeletingId(id);
     try {
-      const res = await fetch(`/api/admin/bookings/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/bookings?id=${encodeURIComponent(id)}`, { method: "DELETE", cache: "no-store" });
       await safeJson(res);
       setBookings((prev) => prev.filter((item) => item.id !== id));
       setCalendarBookings((prev) => prev.filter((item) => item.id !== id));
@@ -383,7 +384,7 @@ export default function GestionalePage() {
     setCalendarDeletingId(id);
     setManualBookingMessage("");
     try {
-      const res = await fetch(`/api/admin/bookings/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/bookings?id=${encodeURIComponent(id)}`, { method: "DELETE", cache: "no-store" });
       await safeJson(res);
       setCalendarBookings((prev) => prev.filter((item) => item.id !== id));
       setBookings((prev) => prev.filter((item) => item.id !== id));
@@ -718,7 +719,7 @@ export default function GestionalePage() {
 
                       <div className="dashboardAppointmentActions">
                         {item.whatsappUrl && <a className="tabBtn secondaryBtn dashboardMiniBtn" href={item.whatsappUrl} target="_blank">WhatsApp</a>}
-                        <button className="tabBtn dangerBtn dashboardMiniBtn" onClick={() => removeBooking(item.id)} disabled={deletingId === item.id}>{deletingId === item.id ? "Elimino..." : "Elimina"}</button>
+                        <button type="button" className="tabBtn dangerBtn dashboardMiniBtn" onClick={() => removeBooking(item.id)} disabled={deletingId === item.id}>{deletingId === item.id ? "Elimino..." : "Elimina"}</button>
                       </div>
                     </div>
                   ))}
@@ -851,7 +852,7 @@ export default function GestionalePage() {
                       </div>
                       <div className="bookingActions">
                         {item.whatsappUrl && <a className="tabBtn secondaryBtn" href={item.whatsappUrl} target="_blank">WhatsApp</a>}
-                        <button className="tabBtn dangerBtn" onClick={() => removeCalendarBooking(item.id)} disabled={calendarDeletingId === item.id}>{calendarDeletingId === item.id ? "Disdico..." : "Disdici"}</button>
+                        <button type="button" className="tabBtn dangerBtn" onClick={() => removeCalendarBooking(item.id)} disabled={calendarDeletingId === item.id}>{calendarDeletingId === item.id ? "Disdico..." : "Disdici"}</button>
                       </div>
                     </div>
                   ))}
@@ -976,7 +977,7 @@ export default function GestionalePage() {
                 </div>
                 <div className="bookingActions">
                   <button className="tabBtn secondaryBtn" onClick={() => setServiceForm(service)}>Modifica</button>
-                  <button className="tabBtn dangerBtn" onClick={() => removeService(service.id)} disabled={deletingServiceId === service.id}>{deletingServiceId === service.id ? "Elimino..." : "Rimuovi"}</button>
+                  <button type="button" className="tabBtn dangerBtn" onClick={() => removeService(service.id)} disabled={deletingServiceId === service.id}>{deletingServiceId === service.id ? "Elimino..." : "Rimuovi"}</button>
                 </div>
               </div>
             ))}
