@@ -187,6 +187,7 @@ export default function GestionalePage() {
   const [manualBooking, setManualBooking] = useState<ManualBookingForm>(emptyManualBooking());
   const [openHistoryCustomerKey, setOpenHistoryCustomerKey] = useState<string | null>(null);
   const [historyInitialized, setHistoryInitialized] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
 
   useEffect(() => {
     checkAuth();
@@ -495,23 +496,40 @@ export default function GestionalePage() {
     [customerHistoryGroups]
   );
 
+  const filteredCustomerHistoryGroups = useMemo(() => {
+    const query = historySearch.trim().toLowerCase();
+    if (!query) return customerHistoryGroups;
+    return customerHistoryGroups.filter((customer) => {
+      const latestBooking = customer.bookings[0];
+      const haystack = [
+        customer.customerName,
+        customer.phone,
+        latestBooking?.serviceName || "",
+        ...customer.bookings.map((item) => `${item.serviceName} ${item.notes || ""}`),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [customerHistoryGroups, historySearch]);
+
   useEffect(() => {
-    if (customerHistoryGroups.length === 0) {
+    if (filteredCustomerHistoryGroups.length === 0) {
       setOpenHistoryCustomerKey(null);
       setHistoryInitialized(false);
       return;
     }
 
     if (!historyInitialized) {
-      setOpenHistoryCustomerKey(customerHistoryGroups[0]?.key || null);
+      setOpenHistoryCustomerKey(filteredCustomerHistoryGroups[0]?.key || null);
       setHistoryInitialized(true);
       return;
     }
 
-    if (openHistoryCustomerKey && !customerHistoryGroups.some((group) => group.key === openHistoryCustomerKey)) {
-      setOpenHistoryCustomerKey(customerHistoryGroups[0]?.key || null);
+    if (openHistoryCustomerKey && !filteredCustomerHistoryGroups.some((group) => group.key === openHistoryCustomerKey)) {
+      setOpenHistoryCustomerKey(filteredCustomerHistoryGroups[0]?.key || null);
     }
-  }, [customerHistoryGroups, openHistoryCustomerKey, historyInitialized]);
+  }, [filteredCustomerHistoryGroups, openHistoryCustomerKey, historyInitialized]);
 
   const activeServices = useMemo(() => services.filter((service) => service.active), [services]);
   const selectedService = useMemo(
@@ -849,7 +867,15 @@ export default function GestionalePage() {
           <div className="grid">
             <div className="sectionTitle">Storico clienti</div>
             <div className="muted historyIntro">Ogni cliente compare una sola volta. Clicca sul cliente per aprire o chiudere il suo storico completo.</div>
-            {customerHistoryGroups.length === 0 ? <div className="badge info">Nessuno storico disponibile nella vista selezionata.</div> : customerHistoryGroups.map((customer) => {
+            <div>
+              <label>Cerca cliente</label>
+              <input
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="Cerca per nome, telefono o servizio"
+              />
+            </div>
+            {filteredCustomerHistoryGroups.length === 0 ? <div className="badge info">Nessun cliente trovato.</div> : filteredCustomerHistoryGroups.map((customer) => {
               const isOpen = openHistoryCustomerKey === customer.key;
               const latestBooking = customer.bookings[0];
               return (
