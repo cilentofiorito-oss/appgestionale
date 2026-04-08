@@ -238,3 +238,27 @@ textarea{ resize: vertical; }
 @media (max-width: 640px){
   .historyBookingRow{ flex-direction:column; }
 }
+
+.historyIntro{
+  font-size: 13px;
+}
+.historySummary strong{
+  display:block;
+  font-size: 15px;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+.historySmallText{
+  font-size: 12px;
+  line-height: 1.35;
+}
+.historyRowText strong{
+  display:block;
+  font-size: 14px;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+.historyDetails .bookingActions .tabBtn{
+  padding: 10px 12px;
+  font-size: 12px;
+}

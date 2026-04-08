@@ -186,6 +186,7 @@ export default function GestionalePage() {
   const [manualBookingMessage, setManualBookingMessage] = useState("");
   const [manualBooking, setManualBooking] = useState<ManualBookingForm>(emptyManualBooking());
   const [openHistoryCustomerKey, setOpenHistoryCustomerKey] = useState<string | null>(null);
+  const [historyInitialized, setHistoryInitialized] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -495,10 +496,22 @@ export default function GestionalePage() {
   );
 
   useEffect(() => {
-    if (!customerHistoryGroups.some((group) => group.key === openHistoryCustomerKey)) {
+    if (customerHistoryGroups.length === 0) {
+      setOpenHistoryCustomerKey(null);
+      setHistoryInitialized(false);
+      return;
+    }
+
+    if (!historyInitialized) {
+      setOpenHistoryCustomerKey(customerHistoryGroups[0]?.key || null);
+      setHistoryInitialized(true);
+      return;
+    }
+
+    if (openHistoryCustomerKey && !customerHistoryGroups.some((group) => group.key === openHistoryCustomerKey)) {
       setOpenHistoryCustomerKey(customerHistoryGroups[0]?.key || null);
     }
-  }, [customerHistoryGroups, openHistoryCustomerKey]);
+  }, [customerHistoryGroups, openHistoryCustomerKey, historyInitialized]);
 
   const activeServices = useMemo(() => services.filter((service) => service.active), [services]);
   const selectedService = useMemo(
@@ -835,7 +848,7 @@ export default function GestionalePage() {
         <section className="card">
           <div className="grid">
             <div className="sectionTitle">Storico clienti</div>
-            <div className="muted">Ogni cliente compare una sola volta. Clicca sul cliente per aprire il suo storico completo.</div>
+            <div className="muted historyIntro">Ogni cliente compare una sola volta. Clicca sul cliente per aprire o chiudere il suo storico completo.</div>
             {customerHistoryGroups.length === 0 ? <div className="badge info">Nessuno storico disponibile nella vista selezionata.</div> : customerHistoryGroups.map((customer) => {
               const isOpen = openHistoryCustomerKey === customer.key;
               const latestBooking = customer.bookings[0];
@@ -846,10 +859,10 @@ export default function GestionalePage() {
                     className={`historyToggle ${isOpen ? "open" : ""}`}
                     onClick={() => setOpenHistoryCustomerKey(isOpen ? null : customer.key)}
                   >
-                    <div>
+                    <div className="historySummary">
                       <strong>{customer.customerName}</strong>
-                      <div className="muted">{customer.phone || "Telefono non disponibile"}</div>
-                      <div className="muted">{customer.totalBookings} appuntamenti · €{customer.totalSpent.toFixed(2)} · Ultimo: {latestBooking ? `${latestBooking.dateLabel} ${latestBooking.startLabel}` : "—"}</div>
+                      <div className="muted historySmallText">{customer.phone || "Telefono non disponibile"}</div>
+                      <div className="muted historySmallText">{customer.totalBookings} appuntamenti · €{customer.totalSpent.toFixed(2)} · Ultimo: {latestBooking ? `${latestBooking.dateLabel} ${latestBooking.startLabel}` : "—"}</div>
                     </div>
                     <span className="historyArrow">{isOpen ? "−" : "+"}</span>
                   </button>
@@ -861,10 +874,10 @@ export default function GestionalePage() {
                       </div>
                       {customer.bookings.map((item) => (
                         <div key={item.id} className="historyBookingRow">
-                          <div>
+                          <div className="historyRowText">
                             <strong>{item.serviceName}</strong>
-                            <div className="muted">{item.dateLabel} · {item.startLabel} - {item.endLabel}</div>
-                            {item.notes ? <div className="muted">Note: {item.notes}</div> : null}
+                            <div className="muted historySmallText">{item.dateLabel} · {item.startLabel} - {item.endLabel}</div>
+                            {item.notes ? <div className="muted historySmallText">Note: {item.notes}</div> : null}
                           </div>
                           <div><strong>€{Number(item.price || 0).toFixed(2)}</strong></div>
                         </div>
