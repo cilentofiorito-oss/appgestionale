@@ -647,8 +647,16 @@ export default function GestionalePage() {
 
       {tab === "dashboard" && (
         <>
-          <section className="card" style={{ marginBottom: 18 }}>
-            <div className="gridTwoCols">
+          <section className="card dashboardHeroCard" style={{ marginBottom: 18 }}>
+            <div className="dashboardHeroHeader">
+              <div>
+                <div className="sectionTitle" style={{ marginTop: 0 }}>Dashboard appuntamenti</div>
+                <div className="muted dashboardHeroText">Vista professionale degli appuntamenti con riepilogo rapido, filtri e azioni immediate.</div>
+              </div>
+              <button className="tabBtn secondaryBtn" type="button" onClick={() => setTab("calendario")}>Apri calendario</button>
+            </div>
+
+            <div className="dashboardFilters">
               <div>
                 <label>Data base</label>
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -664,14 +672,22 @@ export default function GestionalePage() {
             </div>
           </section>
 
-          <section className="statsRow" style={{ marginBottom: 18 }}>
-            <div className="statBox"><strong>{stats.totalAppointments}</strong><span>Appuntamenti</span></div>
-            <div className="statBox"><strong>€{stats.totalRevenue}</strong><span>Incasso stimato</span></div>
-            <div className="statBox"><strong>{stats.uniqueClients}</strong><span>Clienti unici</span></div>
-            <div className="statBox"><strong>{stats.withPhone}</strong><span>Con telefono</span></div>
+          <section className="statsRow dashboardStats" style={{ marginBottom: 18 }}>
+            <div className="statBox statBoxProfessional"><span>Appuntamenti</span><strong>{stats.totalAppointments}</strong><small>Totali nella vista selezionata</small></div>
+            <div className="statBox statBoxProfessional"><span>Incasso stimato</span><strong>€{stats.totalRevenue.toFixed(2)}</strong><small>Valore complessivo del periodo</small></div>
+            <div className="statBox statBoxProfessional"><span>Clienti unici</span><strong>{stats.uniqueClients}</strong><small>Persone distinte servite</small></div>
+            <div className="statBox statBoxProfessional"><span>Con telefono</span><strong>{stats.withPhone}</strong><small>Contatti pronti per follow-up</small></div>
           </section>
 
-          <section className="card">
+          <section className="card dashboardAppointmentsCard">
+            <div className="dashboardSectionHeader">
+              <div>
+                <div className="sectionTitle" style={{ marginTop: 0 }}>Elenco appuntamenti</div>
+                <div className="muted dashboardHeroText">Schede compatte per leggere più appuntamenti a colpo d'occhio.</div>
+              </div>
+              <div className="dashboardCountBadge">{bookings.length} {bookings.length === 1 ? "appuntamento" : "appuntamenti"}</div>
+            </div>
+
             <div className="grid">
               {message && <div className="badge error">{message}</div>}
               {loading ? (
@@ -679,26 +695,30 @@ export default function GestionalePage() {
               ) : bookings.length === 0 ? (
                 <div className="badge info">Nessun appuntamento trovato nella vista selezionata.</div>
               ) : (
-                <div className="bookingList">
+                <div className="dashboardAppointmentList">
                   {bookings.map((item) => (
-                    <div key={item.id} className="bookingCard">
-                      <div className="bookingTop">
-                        <div>
+                    <div key={item.id} className="dashboardAppointmentCard">
+                      <div className="dashboardAppointmentMain">
+                        <div className="dashboardAppointmentIdentity">
                           <h3>{item.customerName}</h3>
-                          <p className="muted">{item.serviceName} · €{item.price}</p>
+                          <p>{item.serviceName}</p>
                         </div>
-                        <div className="bookingTime">
-                          <strong>{item.startLabel} - {item.endLabel}</strong>
-                          <span className="muted">{item.dateLabel}</span>
+
+                        <div className="dashboardAppointmentChipRow">
+                          <span className="dashboardChip dashboardChipTime">{item.startLabel} - {item.endLabel}</span>
+                          <span className="dashboardChip">{item.dateLabel}</span>
+                          <span className="dashboardChip">€{Number(item.price || 0).toFixed(2)}</span>
                         </div>
                       </div>
-                      <div className="bookingMeta">
-                        <div><strong>Telefono:</strong> {item.phone || "—"}</div>
-                        <div><strong>Note:</strong> {item.notes || "—"}</div>
+
+                      <div className="dashboardAppointmentMeta">
+                        <div><span className="dashboardMetaLabel">Telefono</span><strong>{item.phone || "—"}</strong></div>
+                        <div><span className="dashboardMetaLabel">Note</span><strong>{item.notes || "—"}</strong></div>
                       </div>
-                      <div className="bookingActions">
-                        {item.whatsappUrl && <a className="tabBtn secondaryBtn" href={item.whatsappUrl} target="_blank">WhatsApp</a>}
-                        <button className="tabBtn dangerBtn" onClick={() => removeBooking(item.id)} disabled={deletingId === item.id}>{deletingId === item.id ? "Elimino..." : "Elimina"}</button>
+
+                      <div className="dashboardAppointmentActions">
+                        {item.whatsappUrl && <a className="tabBtn secondaryBtn dashboardMiniBtn" href={item.whatsappUrl} target="_blank">WhatsApp</a>}
+                        <button className="tabBtn dangerBtn dashboardMiniBtn" onClick={() => removeBooking(item.id)} disabled={deletingId === item.id}>{deletingId === item.id ? "Elimino..." : "Elimina"}</button>
                       </div>
                     </div>
                   ))}

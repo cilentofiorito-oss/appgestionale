@@ -262,3 +262,157 @@ textarea{ resize: vertical; }
   padding: 10px 12px;
   font-size: 12px;
 }
+
+
+.dashboardHeroCard{
+  padding: 18px;
+}
+.dashboardHeroHeader,
+.dashboardSectionHeader{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+}
+.dashboardHeroText{
+  font-size: 12px;
+  line-height: 1.45;
+}
+.dashboardFilters{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:12px;
+  margin-top: 14px;
+}
+.dashboardStats .statBoxProfessional{
+  text-align:left;
+  padding: 16px;
+  gap: 4px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.03));
+}
+.dashboardStats .statBoxProfessional span{
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.dashboardStats .statBoxProfessional strong{
+  font-size: 24px;
+  line-height: 1.1;
+}
+.dashboardStats .statBoxProfessional small{
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.dashboardCountBadge{
+  border:1px solid rgba(212,175,55,0.24);
+  background: rgba(212,175,55,0.10);
+  color: #f4df94;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dashboardAppointmentList{
+  display:grid;
+  gap:10px;
+}
+.dashboardAppointmentCard{
+  border:1px solid rgba(255,255,255,0.10);
+  border-radius:18px;
+  background: rgba(255,255,255,0.025);
+  padding: 14px;
+  display:grid;
+  gap: 10px;
+}
+.dashboardAppointmentMain{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+}
+.dashboardAppointmentIdentity h3{
+  margin:0;
+  font-size: 16px;
+  line-height: 1.15;
+}
+.dashboardAppointmentIdentity p{
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dashboardAppointmentChipRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:flex-end;
+}
+.dashboardChip{
+  padding: 7px 10px;
+  border-radius: 999px;
+  border:1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.dashboardChipTime{
+  border-color: rgba(212,175,55,0.30);
+  background: rgba(212,175,55,0.10);
+}
+.dashboardAppointmentMeta{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:10px;
+}
+.dashboardAppointmentMeta > div{
+  padding: 10px 12px;
+  border-radius: 14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  min-width: 0;
+}
+.dashboardMetaLabel{
+  display:block;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 6px;
+}
+.dashboardAppointmentMeta strong{
+  display:block;
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.dashboardAppointmentActions{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.dashboardMiniBtn{
+  padding: 9px 12px;
+  font-size: 12px;
+  border-radius: 12px;
+}
+@media (max-width: 760px){
+  .dashboardHeroHeader,
+  .dashboardSectionHeader,
+  .dashboardAppointmentMain{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .dashboardAppointmentChipRow{
+    justify-content:flex-start;
+  }
+  .dashboardAppointmentMeta,
+  .dashboardFilters{
+    grid-template-columns: 1fr;
+  }
+  .dashboardAppointmentActions{
+    justify-content:flex-start;
+  }
+}
